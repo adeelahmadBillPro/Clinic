@@ -20,6 +20,7 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { TagInput } from "./TagInput";
+import { DatePicker } from "@/components/shared/DatePicker";
 import {
   createPatientSchema,
   type CreatePatientInput,
@@ -270,12 +271,21 @@ export function RegisterPatientForm({
               </span>
             )}
           </div>
-          <Input
-            id="p-dob"
-            type="date"
-            max={new Date().toISOString().slice(0, 10)}
-            className="mt-1.5"
-            {...register("dob")}
+          <Controller
+            control={control}
+            name="dob"
+            render={({ field }) => (
+              <DatePicker
+                id="p-dob"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                placeholder="Pick date of birth"
+                disableFuture
+                fromYear={1900}
+                toYear={new Date().getFullYear()}
+                className="mt-1.5"
+              />
+            )}
           />
           {errors.dob && (
             <p className="mt-1 text-xs text-destructive">

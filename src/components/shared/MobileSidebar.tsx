@@ -21,13 +21,15 @@ import { cn } from "@/lib/utils";
 export function MobileSidebar({
   role,
   clinicName,
+  enabledModules,
 }: {
   role: Role;
   clinicName?: string;
+  enabledModules?: Record<string, boolean>;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
-  const groups = navForRole(role);
+  const groups = navForRole(role, enabledModules);
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>

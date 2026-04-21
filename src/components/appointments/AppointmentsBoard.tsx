@@ -31,6 +31,7 @@ import {
   type PatientHit,
 } from "@/components/patients/PatientSearch";
 import { CheckInDialog } from "./CheckInDialog";
+import { DatePicker } from "@/components/shared/DatePicker";
 import { cn } from "@/lib/utils";
 
 type Appt = {
@@ -310,14 +311,16 @@ export function AppointmentsBoard({
               </div>
               <div>
                 <Label>Date</Label>
-                <Input
-                  type="date"
-                  value={form.appointmentDate}
-                  onChange={(e) =>
-                    setForm({ ...form, appointmentDate: e.target.value })
-                  }
-                  className="mt-1"
-                />
+                <div className="mt-1">
+                  <DatePicker
+                    value={form.appointmentDate}
+                    onChange={(v) =>
+                      setForm({ ...form, appointmentDate: v })
+                    }
+                    disablePast
+                    placeholder="Pick date"
+                  />
+                </div>
               </div>
               <div>
                 <Label>Time</Label>

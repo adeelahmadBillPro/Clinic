@@ -18,7 +18,7 @@ export default async function DashboardLayout({
   const clinic = session.user.clinicId
     ? await prisma.clinic.findUnique({
         where: { id: session.user.clinicId },
-        select: { name: true, trialEndsAt: true },
+        select: { name: true, trialEndsAt: true, settings: true },
       })
     : null;
 
@@ -29,12 +29,17 @@ export default async function DashboardLayout({
       })
     : null;
 
+  const moduleSettings =
+    (clinic?.settings as { modules?: Record<string, boolean> } | null)
+      ?.modules ?? {};
+
   return (
     <div className="flex min-h-dvh bg-muted/30">
       <Sidebar
         role={session.user.role}
         clinicName={clinic?.name}
         userSlot={<SidebarUser />}
+        enabledModules={moduleSettings}
       />
 
       <div className="flex min-w-0 flex-1 flex-col">

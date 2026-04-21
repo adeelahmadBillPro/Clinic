@@ -3,11 +3,21 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Loader2, Save, FileDown } from "lucide-react";
+import {
+  Loader2,
+  Save,
+  FileDown,
+  Pill,
+  FlaskConical,
+  BedDouble,
+  Package,
+  LineChart,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -17,6 +27,39 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const MODULES = [
+  {
+    key: "pharmacy" as const,
+    label: "Pharmacy",
+    body: "In-house pharmacy counter, prescription queue, stock dispensing.",
+    icon: Pill,
+  },
+  {
+    key: "inventory" as const,
+    label: "Inventory",
+    body: "Medicines catalog, suppliers, purchase orders, expiry tracking.",
+    icon: Package,
+  },
+  {
+    key: "ipd" as const,
+    label: "IPD / Beds",
+    body: "Inpatient ward with bed grid, admissions, nursing notes, discharge bills.",
+    icon: BedDouble,
+  },
+  {
+    key: "lab" as const,
+    label: "Lab",
+    body: "Test orders, sample tracking, results with abnormal flagging, printable reports.",
+    icon: FlaskConical,
+  },
+  {
+    key: "analytics" as const,
+    label: "Analytics",
+    body: "Revenue mix, doctor load, peak hours heatmap, top medicines.",
+    icon: LineChart,
+  },
+];
 
 const EXPORTS = [
   { kind: "patients", label: "Patients" },
@@ -39,15 +82,24 @@ export function SettingsPanel({
   };
 }) {
   const router = useRouter();
+  const storedModules =
+    (clinic.settings.modules as Record<string, boolean> | undefined) ?? {};
+
   const [form, setForm] = useState({
     name: clinic.name,
     phone: clinic.phone ?? "",
     address: clinic.address ?? "",
     timezone: (clinic.settings.timezone as string) ?? "Asia/Karachi",
     language: (clinic.settings.language as string) ?? "en",
-    tokenResetTime:
-      (clinic.settings.tokenResetTime as string) ?? "00:00",
+    tokenResetTime: (clinic.settings.tokenResetTime as string) ?? "00:00",
     currency: (clinic.settings.currency as string) ?? "PKR",
+  });
+  const [modules, setModules] = useState<Record<string, boolean>>(() => {
+    const init: Record<string, boolean> = {};
+    for (const m of MODULES) {
+      init[m.key] = storedModules[m.key] !== false;
+    }
+    return init;
   });
   const [saving, setSaving] = useState(false);
 
@@ -66,6 +118,7 @@ export function SettingsPanel({
             language: form.language,
             tokenResetTime: form.tokenResetTime,
             currency: form.currency,
+            modules,
           },
         }),
       });
@@ -221,6 +274,62 @@ export function SettingsPanel({
           )}
         </Button>
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 6 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.08 }}
+      >
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm">Enabled modules</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-3 text-sm text-muted-foreground">
+              Turn off modules you don&rsquo;t use (e.g. if you run OPD only).
+              Disabled modules disappear from the sidebar for everyone in the
+              clinic.
+            </p>
+            <ul className="space-y-2">
+              {MODULES.map((m) => {
+                const Icon = m.icon;
+                const on = modules[m.key] !== false;
+                return (
+                  <li
+                    key={m.key}
+                    className="flex items-start gap-3 rounded-lg border bg-background p-3"
+                  >
+                    <span
+                      className={
+                        on
+                          ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"
+                          : "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground"
+                      }
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <div className="flex-1">
+                      <div className="text-sm font-medium">{m.label}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {m.body}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={on}
+                      onCheckedChange={(v) =>
+                        setModules((prev) => ({ ...prev, [m.key]: v }))
+                      }
+                    />
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Hit <span className="font-medium text-foreground">Save changes</span> below to apply.
+            </p>
+          </CardContent>
+        </Card>
+      </motion.div>
 
       <motion.div
         initial={{ opacity: 0, y: 6 }}

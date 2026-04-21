@@ -20,11 +20,20 @@ export function canAny(role: Role | null | undefined, allowed: Role[]): boolean 
   return !!role && allowed.includes(role);
 }
 
+export type ModuleFlag =
+  | "pharmacy"
+  | "lab"
+  | "ipd"
+  | "inventory"
+  | "analytics";
+
 export type NavItem = {
   label: string;
   href: string;
   icon: string;
   roles: Role[];
+  /** Optional module flag — link hidden when clinic has disabled this module. */
+  module?: ModuleFlag;
 };
 
 export type NavGroup = {
@@ -59,18 +68,21 @@ export const NAV: NavGroup[] = [
         href: "/pharmacy",
         icon: "Pill",
         roles: ["OWNER", "ADMIN", "PHARMACIST"],
+        module: "pharmacy",
       },
       {
         label: "Lab",
         href: "/lab",
         icon: "FlaskConical",
         roles: ["OWNER", "ADMIN", "LAB_TECH", "DOCTOR"],
+        module: "lab",
       },
       {
         label: "IPD",
         href: "/ipd",
         icon: "BedDouble",
         roles: ["OWNER", "ADMIN", "NURSE", "DOCTOR"],
+        module: "ipd",
       },
     ],
   },
@@ -105,12 +117,14 @@ export const NAV: NavGroup[] = [
         href: "/inventory",
         icon: "Package",
         roles: ["OWNER", "ADMIN", "PHARMACIST"],
+        module: "inventory",
       },
       {
         label: "Analytics",
         href: "/analytics",
         icon: "LineChart",
         roles: ["OWNER", "ADMIN"],
+        module: "analytics",
       },
       {
         label: "Staff",
@@ -148,10 +162,28 @@ export const NAV: NavGroup[] = [
   },
 ];
 
-export function navForRole(role: Role): NavGroup[] {
+export const DEFAULT_MODULES: Record<ModuleFlag, boolean> = {
+  pharmacy: true,
+  lab: true,
+  ipd: true,
+  inventory: true,
+  analytics: true,
+};
+
+export function navForRole(
+  role: Role,
+  enabledModules: Partial<Record<ModuleFlag, boolean>> = DEFAULT_MODULES,
+): NavGroup[] {
   return NAV.map((group) => ({
     ...group,
-    items: group.items.filter((i) => i.roles.includes(role)),
+    items: group.items.filter((i) => {
+      if (!i.roles.includes(role)) return false;
+      if (i.module) {
+        const on = enabledModules[i.module];
+        return on !== false; // default to true when undefined
+      }
+      return true;
+    }),
   })).filter((g) => g.items.length > 0);
 }
 

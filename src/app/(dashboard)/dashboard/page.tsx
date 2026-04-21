@@ -6,6 +6,7 @@ import { getDashboardMetrics, getClinicMap } from "@/lib/dashboard";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { ClinicMap } from "@/components/dashboard/ClinicMap";
 import { ResetTokensButton } from "@/components/dashboard/ResetTokensButton";
+import { TodayPanel } from "@/components/dashboard/TodayPanel";
 import { buttonVariants } from "@/components/ui/button";
 import { UserPlus, BanknoteArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -99,6 +100,11 @@ export default async function DashboardPage() {
       <div>
         <h2 className="mb-3 text-sm font-semibold">Live clinic</h2>
         <ClinicMap map={clinicMap} />
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-sm font-semibold">Today at a glance</h2>
+        <TodayPanel clinicId={session.user.clinicId} />
       </div>
     </div>
   );

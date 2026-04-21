@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DatePicker } from "@/components/shared/DatePicker";
 import { cn } from "@/lib/utils";
 
 type Doctor = {
@@ -182,14 +183,16 @@ export function PublicBookingForm({
               </div>
               <div>
                 <Label>Preferred date</Label>
-                <Input
-                  type="date"
-                  value={form.appointmentDate}
-                  onChange={(e) =>
-                    setForm({ ...form, appointmentDate: e.target.value })
-                  }
-                  className="mt-1"
-                />
+                <div className="mt-1">
+                  <DatePicker
+                    value={form.appointmentDate}
+                    onChange={(v) =>
+                      setForm({ ...form, appointmentDate: v })
+                    }
+                    disablePast
+                    placeholder="Pick a date"
+                  />
+                </div>
               </div>
               <div>
                 <Label>Preferred time</Label>

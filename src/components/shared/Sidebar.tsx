@@ -7,20 +7,22 @@ import type { ReactNode } from "react";
 import { motion } from "framer-motion";
 import { Logo } from "./Logo";
 import { Icon } from "./Icon";
-import { navForRole } from "@/lib/permissions";
+import { navForRole, type ModuleFlag } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 
 export function Sidebar({
   role,
   clinicName,
   userSlot,
+  enabledModules,
 }: {
   role: Role;
   clinicName?: string;
   userSlot?: ReactNode;
+  enabledModules?: Partial<Record<ModuleFlag, boolean>>;
 }) {
   const pathname = usePathname();
-  const groups = navForRole(role);
+  const groups = navForRole(role, enabledModules);
 
   return (
     <aside className="hidden w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-dvh lg:max-h-dvh">
