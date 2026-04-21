@@ -79,42 +79,14 @@ export function BillDetail({
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    if (autoPrint && ref.current) {
+    if (autoPrint) {
       setTimeout(() => doPrint(), 400);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoPrint]);
 
   function doPrint() {
-    const node = ref.current;
-    if (!node) return;
-    const win = window.open("", "_blank", "width=720,height=900");
-    if (!win) return;
-    win.document.write(`
-      <html>
-        <head>
-          <title>${bill.billNumber}</title>
-          <style>
-            body { font-family: system-ui, sans-serif; padding: 32px; color: #0f172a; }
-            table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-            th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #e5e7eb; font-size:13px }
-            th { color: #64748b; font-weight: 500; text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em }
-            td.num, th.num { text-align:right; font-variant-numeric: tabular-nums }
-            .brand { display:flex; gap:10px; align-items:center; font-weight:700; color:#0F6E56; font-size:18px }
-            .meta { display:flex; justify-content: space-between; margin: 16px 0; font-size:13px }
-            .totals { margin-top: 16px; margin-left: auto; width: 280px }
-            .totals div { display:flex; justify-content: space-between; padding: 3px 0; font-size:13px }
-            .totals .grand { border-top: 1px solid #cbd5e1; margin-top:6px; padding-top:8px; font-weight:700; font-size:16px }
-            .foot { margin-top: 32px; display:flex; justify-content: space-between; font-size:11px; color:#64748b }
-            @media print { body { padding:0 } }
-          </style>
-        </head>
-        <body onload="window.print(); setTimeout(()=>window.close(), 300)">
-          ${node.innerHTML}
-        </body>
-      </html>
-    `);
-    win.document.close();
+    window.print();
   }
 
   async function recordPayment() {
@@ -201,48 +173,59 @@ export function BillDetail({
 
       <div
         ref={ref}
-        className="rounded-xl border bg-card p-8 auth-card-shadow"
+        className="bill-sheet rounded-xl border bg-card p-6 sm:p-8 auth-card-shadow print:rounded-none print:border-0 print:shadow-none"
       >
-        <div className="flex items-start justify-between gap-4">
-          <div className="brand flex items-center gap-2.5">
-            <LogoMark className="h-8 w-8" />
+        {/* Header */}
+        <div className="flex flex-col items-start justify-between gap-4 border-b pb-5 sm:flex-row sm:items-start">
+          <div className="flex items-center gap-3">
+            <LogoMark className="bill-logo h-10 w-10 shrink-0" />
             <div>
               <div className="text-lg font-bold text-primary">
                 {clinic?.name ?? "ClinicOS"}
               </div>
-              <div className="text-xs text-muted-foreground">
-                {clinic?.address}
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {clinic?.phone}
-              </div>
+              {clinic?.address && (
+                <div className="text-xs text-muted-foreground">
+                  {clinic.address}
+                </div>
+              )}
+              {clinic?.phone && (
+                <div className="text-xs text-muted-foreground">
+                  Tel: {clinic.phone}
+                </div>
+              )}
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="text-left sm:text-right">
+            <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Bill number
             </div>
             <div className="font-mono text-lg font-bold">
               {bill.billNumber}
             </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              {new Date(bill.createdAt).toLocaleString()}
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {new Date(bill.createdAt).toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
             </div>
           </div>
         </div>
 
-        <div className="meta mt-5 grid gap-4 sm:grid-cols-2 text-sm">
+        {/* Patient + status */}
+        <div className="mt-5 grid gap-4 text-sm sm:grid-cols-2">
           <div>
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Billed to
             </div>
             <div className="mt-1 font-medium">{patient?.name ?? "—"}</div>
-            <div className="text-xs text-muted-foreground">
-              {patient?.mrn} · {patient?.phone}
-            </div>
+            {patient && (
+              <div className="text-xs text-muted-foreground">
+                {patient.mrn} · {patient.phone}
+              </div>
+            )}
           </div>
-          <div className="text-right">
-            <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          <div className="sm:text-right">
+            <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
               Status
             </div>
             <Badge variant="secondary" className="mt-1">
@@ -254,68 +237,88 @@ export function BillDetail({
           </div>
         </div>
 
-        <table className="mt-4 w-full">
-          <thead>
-            <tr>
-              <th>Description</th>
-              <th className="num">Qty</th>
-              <th className="num">Unit</th>
-              <th className="num">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {bill.items.map((i, idx) => (
-              <tr key={idx}>
-                <td>{i.description}</td>
-                <td className="num">{i.qty}</td>
-                <td className="num">
-                  ₨ {Math.round(i.unitPrice).toLocaleString()}
-                </td>
-                <td className="num">
-                  ₨ {Math.round(i.amount).toLocaleString()}
-                </td>
+        {/* Items table */}
+        <div className="mt-6 overflow-hidden rounded-lg border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/40 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                <th className="px-3 py-2 text-left">Description</th>
+                <th className="w-20 px-3 py-2 text-right">Qty</th>
+                <th className="w-28 px-3 py-2 text-right">Unit</th>
+                <th className="w-32 px-3 py-2 text-right">Amount</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {bill.items.map((i, idx) => (
+                <tr key={idx} className="border-t">
+                  <td className="px-3 py-2">{i.description}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {i.qty}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    ₨ {Math.round(i.unitPrice).toLocaleString()}
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums font-medium">
+                    ₨ {Math.round(i.amount).toLocaleString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
-        <div className="totals ml-auto w-full max-w-xs">
-          <div>
-            <span className="text-muted-foreground">Subtotal</span>
-            <span>₨ {Math.round(bill.subtotal).toLocaleString()}</span>
-          </div>
-          {bill.discount > 0 && (
-            <div>
-              <span className="text-muted-foreground">
-                Discount{" "}
-                {bill.discountReason && `(${bill.discountReason})`}
+        {/* Totals */}
+        <div className="mt-4 flex justify-end">
+          <div className="w-full max-w-xs space-y-1.5 text-sm">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="tabular-nums">
+                ₨ {Math.round(bill.subtotal).toLocaleString()}
               </span>
-              <span>− ₨ {Math.round(bill.discount).toLocaleString()}</span>
             </div>
-          )}
-          <div className="grand">
-            <span>Total</span>
-            <span>₨ {Math.round(bill.totalAmount).toLocaleString()}</span>
+            {bill.discount > 0 && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">
+                  Discount
+                  {bill.discountReason && ` (${bill.discountReason})`}
+                </span>
+                <span className="tabular-nums">
+                  − ₨ {Math.round(bill.discount).toLocaleString()}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between border-t pt-2 text-base font-bold">
+              <span>Total</span>
+              <span className="tabular-nums">
+                ₨ {Math.round(bill.totalAmount).toLocaleString()}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                Paid ({bill.paymentMethod ?? "—"})
+              </span>
+              <span className="tabular-nums">
+                ₨ {Math.round(bill.paidAmount).toLocaleString()}
+              </span>
+            </div>
+            {bill.balance > 0 && (
+              <div className="flex items-center justify-between rounded-md bg-amber-500/10 px-2 py-1 text-sm font-semibold text-amber-700">
+                <span>Balance</span>
+                <span className="tabular-nums">
+                  ₨ {Math.round(bill.balance).toLocaleString()}
+                </span>
+              </div>
+            )}
+            {bill.insuranceInfo?.company && (
+              <div className="mt-2 rounded bg-muted/50 px-2 py-1 text-[11px] text-muted-foreground">
+                Insurance: {bill.insuranceInfo.company} ·{" "}
+                {bill.insuranceInfo.coveragePct}% covered · Patient portion ₨{" "}
+                {Math.round(
+                  bill.insuranceInfo.patientPortion ?? 0,
+                ).toLocaleString()}
+              </div>
+            )}
           </div>
-          <div>
-            <span className="text-muted-foreground">
-              Paid ({bill.paymentMethod ?? "—"})
-            </span>
-            <span>₨ {Math.round(bill.paidAmount).toLocaleString()}</span>
-          </div>
-          {bill.balance > 0 && (
-            <div className={cn("font-semibold text-amber-700")}>
-              <span>Balance</span>
-              <span>₨ {Math.round(bill.balance).toLocaleString()}</span>
-            </div>
-          )}
-          {bill.insuranceInfo?.company && (
-            <div className="mt-2 rounded bg-muted/50 px-2 py-1 text-[11px] text-muted-foreground">
-              Insurance: {bill.insuranceInfo.company} ·{" "}
-              {bill.insuranceInfo.coveragePct}% covered · Patient portion ₨{" "}
-              {Math.round(bill.insuranceInfo.patientPortion ?? 0).toLocaleString()}
-            </div>
-          )}
         </div>
 
         {bill.notes && (
@@ -324,11 +327,40 @@ export function BillDetail({
           </div>
         )}
 
-        <div className="foot mt-8 flex justify-between text-xs text-muted-foreground">
+        <div className="mt-8 flex justify-between border-t pt-3 text-xs text-muted-foreground">
           <span>Thank you!</span>
           <span>Generated by ClinicOS</span>
         </div>
       </div>
+
+      {/* Print-specific rules */}
+      <style jsx global>{`
+        @media print {
+          body * {
+            visibility: hidden;
+          }
+          .bill-sheet,
+          .bill-sheet * {
+            visibility: visible;
+          }
+          .bill-sheet {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            padding: 16px !important;
+          }
+          .bill-logo {
+            width: 40px !important;
+            height: 40px !important;
+            max-width: 40px !important;
+            max-height: 40px !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+        }
+      `}</style>
 
       {payOpen && (
         <div

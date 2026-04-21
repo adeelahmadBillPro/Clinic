@@ -19,6 +19,28 @@ import { isAdmin } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
+function formatAge(dob: Date | null): string | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  const diffMs = now.getTime() - d.getTime();
+  if (diffMs < 0) return null;
+  const years =
+    now.getFullYear() -
+    d.getFullYear() -
+    (now <
+    new Date(now.getFullYear(), d.getMonth(), d.getDate())
+      ? 1
+      : 0);
+  if (years >= 2) return `${years} yrs`;
+  const months = Math.floor(diffMs / (30.44 * 24 * 60 * 60 * 1000));
+  if (months >= 1) return `${months} mo`;
+  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  if (days >= 1) return `${days} day${days > 1 ? "s" : ""}`;
+  return "newborn";
+}
+
 export default async function PatientEmrPage({
   params,
 }: {
@@ -78,12 +100,7 @@ export default async function PatientEmrPage({
     ]),
   );
 
-  const age = patient.dob
-    ? Math.floor(
-        (Date.now() - new Date(patient.dob).getTime()) /
-          (365.25 * 24 * 60 * 60 * 1000),
-      )
-    : null;
+  const ageLabel = formatAge(patient.dob);
 
   // Outstanding consultation balance (PENDING / PARTIAL OPD bills)
   const opdUnpaid = bills.filter(
@@ -124,10 +141,10 @@ export default async function PatientEmrPage({
                   </span>
                 </>
               )}
-              {age !== null && (
+              {ageLabel && (
                 <>
                   <span>·</span>
-                  <span>{age} yrs</span>
+                  <span>{ageLabel}</span>
                 </>
               )}
               <span>·</span>

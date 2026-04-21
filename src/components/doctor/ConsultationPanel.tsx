@@ -129,6 +129,15 @@ export function ConsultationPanel({
 
   const save = useCallback(
     async (complete = false) => {
+      // If completing with an unpaid consultation bill, confirm first.
+      if (complete && outstanding !== null && outstanding > 0) {
+        const ok = window.confirm(
+          `Consultation fee is UNPAID (₨ ${Math.round(outstanding).toLocaleString()} owed).\n\n` +
+            `Tell the patient to pay at reception before leaving.\n\n` +
+            `Mark this consultation complete anyway?`,
+        );
+        if (!ok) return;
+      }
       const setBusy = complete ? setCompleting : setSaving;
       setBusy(true);
       try {
@@ -163,7 +172,27 @@ export function ConsultationPanel({
           return;
         }
         if (complete) {
-          toast.success(`Consultation complete · ${token.displayToken}`);
+          const rxId: string | null = body?.data?.prescriptionId ?? null;
+          toast.success(`Consultation complete · ${token.displayToken}`, {
+            description: rxId
+              ? "Click below to print the prescription for the patient."
+              : undefined,
+            duration: 8000,
+            action: rxId
+              ? {
+                  label: "Print Rx",
+                  onClick: () => {
+                    window.open(`/prescriptions/${rxId}`, "_blank");
+                  },
+                }
+              : undefined,
+          });
+          if (outstanding !== null && outstanding > 0) {
+            toast.warning(
+              `Reception se fee ₨ ${Math.round(outstanding).toLocaleString()} collect karvain`,
+              { duration: 10000 },
+            );
+          }
           onDone();
         } else {
           toast.success("Saved");
