@@ -49,7 +49,7 @@ export default async function DashboardLayout({
           trialEndsAt={clinic?.trialEndsAt ?? null}
           status={subscription?.status}
         />
-        <TopBar clinicName={clinic?.name} />
+        <TopBar clinicName={clinic?.name} enabledModules={moduleSettings} />
 
         <main className="flex-1 overflow-x-hidden px-4 pb-24 pt-6 sm:px-6 lg:pb-10">
           <Suspense fallback={null}>

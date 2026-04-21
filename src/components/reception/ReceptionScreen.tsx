@@ -149,12 +149,14 @@ export function ReceptionScreen({
               1. Find or register patient
             </div>
             <PatientSearch onSelect={onPickExisting} />
-            <div className="mt-3 flex justify-between text-xs text-muted-foreground">
-              <span>Search by name, phone, or MRN</span>
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <span className="text-xs text-muted-foreground">
+                Search by name, phone, or MRN
+              </span>
               <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="ghost" size="xs">
-                    <UserPlus className="mr-1 h-3 w-3" />
+                  <Button size="sm" className="shrink-0">
+                    <UserPlus className="mr-1.5 h-3.5 w-3.5" />
                     New patient
                   </Button>
                 </DialogTrigger>

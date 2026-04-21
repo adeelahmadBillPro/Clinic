@@ -47,15 +47,18 @@ export function UserMenu({
 }) {
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger
-        className="inline-flex h-10 w-10 items-center justify-center rounded-full outline-none transition hover:ring-2 hover:ring-primary/20 focus-visible:ring-2 focus-visible:ring-primary/50 active:scale-95"
-        aria-label="Account menu"
-      >
-        <Avatar className="h-8 w-8">
-          <AvatarFallback className="bg-primary/15 text-primary text-xs font-semibold">
-            {initialsOf(name)}
-          </AvatarFallback>
-        </Avatar>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Account menu"
+          className="inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-full outline-none transition hover:ring-2 hover:ring-primary/30 focus-visible:ring-2 focus-visible:ring-primary/50 active:scale-95"
+        >
+          <Avatar className="pointer-events-none h-8 w-8">
+            <AvatarFallback className="bg-primary/15 text-primary text-xs font-semibold">
+              {initialsOf(name)}
+            </AvatarFallback>
+          </Avatar>
+        </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60 p-1">
         <DropdownMenuLabel className="space-y-1 p-2">

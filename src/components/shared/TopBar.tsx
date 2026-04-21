@@ -4,14 +4,27 @@ import { UserMenu } from "./UserMenu";
 import { ThemeToggle } from "./ThemeToggle";
 import { NotificationBell } from "./NotificationBell";
 import { SidebarCollapseToggle } from "./SidebarCollapseToggle";
+import { SidebarUser } from "./SidebarUser";
+import type { ModuleFlag } from "@/lib/permissions";
 
-export async function TopBar({ clinicName }: { clinicName?: string }) {
+export async function TopBar({
+  clinicName,
+  enabledModules,
+}: {
+  clinicName?: string;
+  enabledModules?: Partial<Record<ModuleFlag, boolean>>;
+}) {
   const session = await auth();
   if (!session?.user) return null;
 
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur-md sm:px-6">
-      <MobileSidebar role={session.user.role} clinicName={clinicName} />
+      <MobileSidebar
+        role={session.user.role}
+        clinicName={clinicName}
+        enabledModules={enabledModules}
+        userSlot={<SidebarUser />}
+      />
       <SidebarCollapseToggle />
 
       <div className="flex flex-1 items-center gap-3">

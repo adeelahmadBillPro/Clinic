@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { Role } from "@prisma/client";
@@ -13,7 +13,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { navForRole } from "@/lib/permissions";
+import { navForRole, type ModuleFlag } from "@/lib/permissions";
 import { Icon } from "./Icon";
 import { Logo } from "./Logo";
 import { cn } from "@/lib/utils";
@@ -22,10 +22,12 @@ export function MobileSidebar({
   role,
   clinicName,
   enabledModules,
+  userSlot,
 }: {
   role: Role;
   clinicName?: string;
-  enabledModules?: Record<string, boolean>;
+  enabledModules?: Partial<Record<ModuleFlag, boolean>>;
+  userSlot?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
@@ -39,8 +41,8 @@ export function MobileSidebar({
           <span className="sr-only">Open menu</span>
         </Button>
       </SheetTrigger>
-      <SheetContent side="left" className="w-72 p-0">
-        <SheetHeader className="border-b px-5 py-4 text-left">
+      <SheetContent side="left" className="flex h-full w-72 flex-col gap-0 p-0">
+        <SheetHeader className="shrink-0 border-b px-5 py-4 text-left">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <Logo />
           {clinicName && (
@@ -49,7 +51,7 @@ export function MobileSidebar({
             </div>
           )}
         </SheetHeader>
-        <nav className="px-3 py-4">
+        <nav className="min-h-0 flex-1 overflow-y-auto px-3 py-4">
           {groups.map((group) => (
             <div key={group.label} className="mb-5">
               <div className="mb-1.5 px-3 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
@@ -82,6 +84,7 @@ export function MobileSidebar({
             </div>
           ))}
         </nav>
+        {userSlot && <div className="shrink-0">{userSlot}</div>}
       </SheetContent>
     </Sheet>
   );
