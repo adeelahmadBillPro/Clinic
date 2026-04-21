@@ -1,0 +1,429 @@
+"use client";
+
+import { useState } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { motion, AnimatePresence } from "framer-motion";
+import { AlertTriangle, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Button } from "@/components/ui/button";
+import { TagInput } from "./TagInput";
+import {
+  createPatientSchema,
+  type CreatePatientInput,
+} from "@/lib/validations/patient";
+import { cn } from "@/lib/utils";
+
+const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"] as const;
+const COMMON_ALLERGIES = [
+  "Penicillin",
+  "Sulfa",
+  "Aspirin",
+  "Peanuts",
+  "Dust",
+  "Pollen",
+  "Latex",
+];
+const COMMON_CONDITIONS = [
+  "Hypertension",
+  "Diabetes Type 2",
+  "Asthma",
+  "Thyroid",
+  "Heart disease",
+];
+
+type CreatedPatient = { id: string; mrn: string; name: string; phone: string };
+
+export function RegisterPatientForm({
+  onCreated,
+  compact,
+}: {
+  onCreated?: (p: CreatedPatient) => void;
+  compact?: boolean;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [duplicate, setDuplicate] = useState<null | {
+    name: string;
+    mrn: string;
+    phone: string;
+  }>(null);
+  const [pendingValues, setPendingValues] = useState<CreatePatientInput | null>(
+    null,
+  );
+
+  const {
+    register,
+    handleSubmit,
+    control,
+    watch,
+    setError,
+    formState: { errors },
+  } = useForm<CreatePatientInput>({
+    resolver: zodResolver(createPatientSchema),
+    defaultValues: {
+      name: "",
+      phone: "",
+      gender: "M",
+      dob: "",
+      address: "",
+      bloodGroup: "",
+      allergies: [],
+      chronicConditions: [],
+      emergencyContact: "",
+      emergencyPhone: "",
+    },
+  });
+
+  const dobValue = watch("dob");
+  const ageLabel = computeAgeLabel(dobValue);
+
+  async function submit(values: CreatePatientInput, forceCreate = false) {
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/patients", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...values, forceCreate }),
+      });
+      const body = await res.json().catch(() => ({}));
+
+      if (res.status === 409 && body?.code === "DUPLICATE_PHONE") {
+        setDuplicate(body.match);
+        setPendingValues(values);
+        return;
+      }
+
+      if (!res.ok || !body?.success) {
+        const field = body?.field as keyof CreatePatientInput | undefined;
+        if (field) {
+          setError(field, { type: "server", message: body.error });
+        } else {
+          toast.error(body?.error ?? "Could not register patient");
+        }
+        return;
+      }
+
+      toast.success(`Patient registered · ${body.data.mrn}`);
+      onCreated?.(body.data);
+    } catch {
+      toast.error("Network error");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form
+      noValidate
+      onSubmit={handleSubmit((v) => submit(v, false))}
+      className={cn("space-y-4", compact && "text-sm")}
+    >
+      <AnimatePresence>
+        {duplicate && pendingValues && (
+          <motion.div
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3.5 text-sm"
+          >
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+              <div className="min-w-0">
+                <div className="font-medium text-amber-800">
+                  Existing patient with this phone
+                </div>
+                <div className="mt-1 text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    {duplicate.name}
+                  </span>{" "}
+                  · {duplicate.mrn} · {duplicate.phone}
+                </div>
+                <div className="mt-2.5 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      onCreated?.({
+                        id: "",
+                        mrn: duplicate.mrn,
+                        name: duplicate.name,
+                        phone: duplicate.phone,
+                      })
+                    }
+                  >
+                    Use existing patient
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => submit(pendingValues, true)}
+                    disabled={submitting}
+                  >
+                    Register as new anyway
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setDuplicate(null);
+                      setPendingValues(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="p-name">
+            Full name <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="p-name"
+            className={cn("mt-1.5", errors.name && "border-destructive")}
+            placeholder="Muhammad Ali"
+            aria-invalid={!!errors.name}
+            {...register("name")}
+          />
+          {errors.name && (
+            <p className="mt-1 text-xs text-destructive">
+              {errors.name.message}
+            </p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="p-phone">
+            Phone <span className="text-destructive">*</span>
+          </Label>
+          <Input
+            id="p-phone"
+            type="tel"
+            className={cn("mt-1.5", errors.phone && "border-destructive")}
+            placeholder="0300-1234567"
+            aria-invalid={!!errors.phone}
+            {...register("phone")}
+          />
+          {errors.phone && (
+            <p className="mt-1 text-xs text-destructive">
+              {errors.phone.message}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-[auto_1fr_1fr]">
+        <div>
+          <Label>Gender</Label>
+          <Controller
+            control={control}
+            name="gender"
+            render={({ field }) => (
+              <RadioGroup
+                value={field.value}
+                onValueChange={field.onChange}
+                className="mt-1.5 flex gap-1 rounded-md bg-muted p-1"
+              >
+                {(["M", "F", "Other"] as const).map((g) => (
+                  <label
+                    key={g}
+                    className={cn(
+                      "flex cursor-pointer items-center gap-1 rounded px-3 py-1.5 text-xs font-medium",
+                      field.value === g
+                        ? "bg-background text-foreground shadow-sm"
+                        : "text-muted-foreground",
+                    )}
+                  >
+                    <RadioGroupItem value={g} className="sr-only" />
+                    {g === "M" ? "Male" : g === "F" ? "Female" : "Other"}
+                  </label>
+                ))}
+              </RadioGroup>
+            )}
+          />
+        </div>
+        <div>
+          <div className="flex items-baseline justify-between">
+            <Label htmlFor="p-dob">Date of birth</Label>
+            {ageLabel && (
+              <span className="text-xs font-medium text-primary">
+                {ageLabel}
+              </span>
+            )}
+          </div>
+          <Input
+            id="p-dob"
+            type="date"
+            max={new Date().toISOString().slice(0, 10)}
+            className="mt-1.5"
+            {...register("dob")}
+          />
+          {errors.dob && (
+            <p className="mt-1 text-xs text-destructive">
+              {errors.dob.message}
+            </p>
+          )}
+        </div>
+        <div>
+          <Label htmlFor="p-blood">Blood group</Label>
+          <Controller
+            control={control}
+            name="bloodGroup"
+            render={({ field }) => (
+              <Select
+                value={field.value ?? ""}
+                onValueChange={(v) => field.onChange(v)}
+              >
+                <SelectTrigger id="p-blood" className="mt-1.5">
+                  <SelectValue placeholder="—" />
+                </SelectTrigger>
+                <SelectContent>
+                  {BLOOD_GROUPS.map((b) => (
+                    <SelectItem key={b} value={b}>
+                      {b}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+      </div>
+
+      <div>
+        <Label htmlFor="p-address">Address</Label>
+        <Textarea
+          id="p-address"
+          rows={2}
+          className="mt-1.5 resize-none"
+          placeholder="Street, area, city..."
+          {...register("address")}
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label>Known allergies</Label>
+          <Controller
+            control={control}
+            name="allergies"
+            render={({ field }) => (
+              <TagInput
+                value={field.value ?? []}
+                onChange={field.onChange}
+                placeholder="Type and press Enter"
+                suggestions={COMMON_ALLERGIES}
+                className="mt-1.5"
+              />
+            )}
+          />
+        </div>
+        <div>
+          <Label>Chronic conditions</Label>
+          <Controller
+            control={control}
+            name="chronicConditions"
+            render={({ field }) => (
+              <TagInput
+                value={field.value ?? []}
+                onChange={field.onChange}
+                placeholder="Type and press Enter"
+                suggestions={COMMON_CONDITIONS}
+                className="mt-1.5"
+              />
+            )}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <Label htmlFor="p-emergency-contact">Emergency contact name</Label>
+          <Input
+            id="p-emergency-contact"
+            className="mt-1.5"
+            placeholder="Relation — e.g. Brother, Amjad"
+            {...register("emergencyContact")}
+          />
+        </div>
+        <div>
+          <Label htmlFor="p-emergency-phone">Emergency contact phone</Label>
+          <Input
+            id="p-emergency-phone"
+            type="tel"
+            className="mt-1.5"
+            placeholder="0300-1234567"
+            {...register("emergencyPhone")}
+          />
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <Button type="submit" disabled={submitting}>
+          {submitting ? (
+            <>
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              Registering...
+            </>
+          ) : (
+            "Register patient"
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+}
+
+function computeAgeLabel(dob: string | undefined | null): string | null {
+  if (!dob) return null;
+  const d = new Date(dob);
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  if (d > now) return null;
+
+  let years = now.getFullYear() - d.getFullYear();
+  let months = now.getMonth() - d.getMonth();
+  let days = now.getDate() - d.getDate();
+
+  if (days < 0) {
+    months -= 1;
+    const prevMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    days += prevMonth.getDate();
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+
+  if (years >= 2) return `Age ${years} years`;
+  if (years === 1) {
+    return months > 0
+      ? `Age 1 year ${months} mo`
+      : `Age 1 year`;
+  }
+  if (months >= 1) {
+    return days > 0
+      ? `Age ${months} mo ${days}d`
+      : `Age ${months} months`;
+  }
+  return `Age ${days} day${days === 1 ? "" : "s"}`;
+}

@@ -1,0 +1,539 @@
+// ClinicOS - Full Prisma Schema
+// Multi-tenant SaaS clinic management system
+// Isolation: row-level (every tenant model has clinicId + index)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── PUBLIC SCHEMA ─────────────────────────────────────────
+
+model User {
+  id                   String    @id @default(cuid())
+  name                 String
+  email                String    @unique
+  phone                String?
+  password             String
+  role                 Role
+  clinicId             String?
+  isActive             Boolean   @default(true)
+  lastLoginAt          DateTime?
+  failedLoginAttempts  Int       @default(0)
+  lockedUntil          DateTime?
+  resetOtpHash         String?
+  resetOtpExpiresAt    DateTime?
+  createdAt            DateTime  @default(now())
+
+  @@index([clinicId])
+}
+
+model Clinic {
+  id               String    @id @default(cuid())
+  name             String
+  slug             String    @unique
+  phone            String?
+  address          String?
+  logoUrl          String?
+  ownerId          String
+  planId           String
+  trialEndsAt      DateTime?
+  subscriptionId   String?
+  stripeCustomerId String?
+  isActive         Boolean   @default(true)
+  settings         Json      @default("{}")
+  createdAt        DateTime  @default(now())
+}
+
+model Plan {
+  id                   String   @id @default(cuid())
+  name                 String   @unique
+  monthlyPrice         Decimal
+  yearlyPrice          Decimal?
+  oneTimePrice         Decimal?
+  maxDoctors           Int
+  maxPatients          Int
+  features             Json
+  stripePriceIdMonthly String?
+  stripePriceIdYearly  String?
+  isActive             Boolean  @default(true)
+}
+
+model Subscription {
+  id                   String    @id @default(cuid())
+  clinicId             String    @unique
+  stripeSubscriptionId String?
+  planId               String
+  status               String
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean   @default(false)
+  createdAt            DateTime  @default(now())
+}
+
+// ─── TENANT MODELS (row-level isolation via clinicId) ──────
+
+model Patient {
+  id                String    @id @default(cuid())
+  clinicId          String
+  mrn               String
+  name              String
+  phone             String
+  dob               DateTime?
+  gender            String
+  address           String?
+  bloodGroup        String?
+  allergies         String[]
+  chronicConditions String[]
+  emergencyContact  String?
+  emergencyPhone    String?
+  isActive          Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([clinicId, mrn])
+  @@index([clinicId])
+  @@index([clinicId, phone])
+  @@index([clinicId, name])
+}
+
+model Doctor {
+  id              String  @id @default(cuid())
+  clinicId        String
+  userId          String  @unique
+  specialization  String
+  qualification   String
+  roomNumber      String?
+  consultationFee Decimal
+  isAvailable     Boolean @default(true)
+  status          String  @default("AVAILABLE")
+  schedule        Json
+  revenueSharePct Decimal @default(0)
+
+  @@index([clinicId])
+}
+
+model Token {
+  id             String      @id @default(cuid())
+  clinicId       String
+  tokenNumber    Int
+  displayToken   String
+  patientId      String
+  doctorId       String
+  type           VisitType
+  chiefComplaint String?
+  status         TokenStatus
+  issuedBy       String
+  issuedAt       DateTime    @default(now())
+  expiresAt      DateTime
+  calledAt       DateTime?
+  startedAt      DateTime?
+  completedAt    DateTime?
+  cancelReason   String?
+
+  @@index([clinicId, status])
+  @@index([clinicId, doctorId, issuedAt])
+}
+
+model Appointment {
+  id              String     @id @default(cuid())
+  clinicId        String
+  patientId       String?
+  patientName     String
+  patientPhone    String
+  doctorId        String
+  appointmentDate DateTime
+  timeSlot        String
+  type            String
+  status          ApptStatus
+  tokenId         String?
+  notes           String?
+  bookedVia       String     @default("RECEPTION")
+  createdAt       DateTime   @default(now())
+
+  @@index([clinicId, appointmentDate])
+  @@index([clinicId, doctorId, appointmentDate])
+}
+
+model Consultation {
+  id             String    @id @default(cuid())
+  clinicId       String
+  tokenId        String
+  patientId      String
+  doctorId       String
+  chiefComplaint String
+  subjective     String?
+  objective      String?
+  assessment     String?
+  plan           String?
+  diagnosisCodes Json?
+  referredTo     String?
+  followUpDate   DateTime?
+  followUpNotes  String?
+  createdAt      DateTime  @default(now())
+
+  @@index([clinicId, patientId])
+  @@index([clinicId, doctorId])
+}
+
+model VitalSigns {
+  id             String   @id @default(cuid())
+  clinicId       String
+  patientId      String
+  consultationId String?
+  recordedBy     String
+  bp             String?
+  pulse          Int?
+  temperature    Decimal?
+  weight         Decimal?
+  height         Decimal?
+  spO2           Int?
+  bloodSugar     Decimal?
+  bmi            Decimal?
+  recordedAt     DateTime @default(now())
+
+  @@index([clinicId, patientId])
+}
+
+model Prescription {
+  id             String             @id @default(cuid())
+  clinicId       String
+  consultationId String
+  patientId      String
+  doctorId       String
+  medicines      Json
+  notes          String?
+  status         PrescriptionStatus
+  sentAt         DateTime?
+  createdAt      DateTime           @default(now())
+
+  @@index([clinicId, status])
+  @@index([clinicId, patientId])
+}
+
+model Medicine {
+  id            String    @id @default(cuid())
+  clinicId      String
+  name          String
+  genericName   String?
+  category      String
+  unit          String
+  stockQty      Decimal   @default(0)
+  minStockLevel Decimal   @default(10)
+  purchasePrice Decimal
+  salePrice     Decimal
+  batchNumber   String?
+  expiryDate    DateTime?
+  supplierId    String?
+  location      String?
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+
+  @@index([clinicId, name])
+  @@index([clinicId, isActive])
+}
+
+model PharmacyOrder {
+  id             String      @id @default(cuid())
+  clinicId       String
+  orderNumber    String
+  prescriptionId String?
+  patientId      String
+  items          Json
+  totalAmount    Decimal
+  paidAmount     Decimal     @default(0)
+  status         OrderStatus
+  dispensedBy    String?
+  notes          String?
+  createdAt      DateTime    @default(now())
+
+  @@unique([clinicId, orderNumber])
+  @@index([clinicId, status])
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  clinicId  String
+  name      String
+  contact   String?
+  phone     String?
+  email     String?
+  address   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([clinicId])
+}
+
+model PurchaseOrder {
+  id            String    @id @default(cuid())
+  clinicId      String
+  poNumber      String
+  supplierId    String
+  items         Json
+  totalAmount   Decimal
+  status        POStatus
+  orderedAt     DateTime?
+  receivedAt    DateTime?
+  invoiceNumber String?
+  notes         String?
+  createdBy     String
+  createdAt     DateTime  @default(now())
+
+  @@unique([clinicId, poNumber])
+  @@index([clinicId, status])
+}
+
+model StockMovement {
+  id         String   @id @default(cuid())
+  clinicId   String
+  medicineId String
+  type       String
+  qty        Decimal
+  reason     String?
+  reference  String?
+  doneBy     String
+  createdAt  DateTime @default(now())
+
+  @@index([clinicId, medicineId])
+}
+
+model Bed {
+  id               String  @id @default(cuid())
+  clinicId         String
+  bedNumber        String
+  wardName         String
+  bedType          String
+  dailyRate        Decimal
+  isOccupied       Boolean @default(false)
+  isActive         Boolean @default(true)
+  currentPatientId String?
+
+  @@unique([clinicId, bedNumber])
+  @@index([clinicId, isOccupied])
+}
+
+model IpdAdmission {
+  id                 String          @id @default(cuid())
+  clinicId           String
+  admissionNumber    String
+  patientId          String
+  bedId              String
+  doctorId           String
+  admissionDate      DateTime        @default(now())
+  admissionNotes     String?
+  admissionDiagnosis String?
+  dischargeDate      DateTime?
+  dischargeDiagnosis String?
+  dischargeNotes     String?
+  status             AdmissionStatus
+  totalCharges       Decimal         @default(0)
+
+  @@unique([clinicId, admissionNumber])
+  @@index([clinicId, status])
+}
+
+model NursingNote {
+  id           String   @id @default(cuid())
+  clinicId     String
+  admissionId  String
+  patientId    String
+  nurseId      String
+  shift        String
+  vitals       Json?
+  medications  Json?
+  observations String?
+  createdAt    DateTime @default(now())
+
+  @@index([clinicId, admissionId])
+}
+
+model LabOrder {
+  id                String    @id @default(cuid())
+  clinicId          String
+  orderNumber       String
+  patientId         String
+  doctorId          String
+  consultationId    String?
+  admissionId       String?
+  tests             Json
+  totalAmount       Decimal
+  status            LabStatus
+  results           Json?
+  reportUrl         String?
+  processedBy       String?
+  sampleCollectedAt DateTime?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+
+  @@unique([clinicId, orderNumber])
+  @@index([clinicId, status])
+}
+
+model Bill {
+  id             String     @id @default(cuid())
+  clinicId       String
+  billNumber     String
+  patientId      String
+  billType       BillType
+  admissionId    String?
+  items          Json
+  subtotal       Decimal
+  discount       Decimal    @default(0)
+  discountReason String?
+  totalAmount    Decimal
+  paidAmount     Decimal    @default(0)
+  balance        Decimal
+  paymentMethod  String?
+  insuranceInfo  Json?
+  status         BillStatus
+  collectedBy    String
+  notes          String?
+  createdAt      DateTime   @default(now())
+
+  @@unique([clinicId, billNumber])
+  @@index([clinicId, status])
+  @@index([clinicId, createdAt])
+}
+
+model CashShift {
+  id             String    @id @default(cuid())
+  clinicId       String
+  userId         String
+  shiftDate      DateTime
+  shiftType      String
+  openingBalance Decimal   @default(0)
+  totalCollected Decimal
+  declaredCash   Decimal
+  difference     Decimal
+  status         String
+  notes          String?
+  approvedBy     String?
+  submittedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([clinicId, shiftDate])
+  @@index([clinicId, userId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  clinicId   String
+  userId     String
+  userName   String
+  action     String
+  entityType String
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([clinicId, createdAt])
+  @@index([clinicId, userId])
+  @@index([clinicId, action])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  clinicId  String
+  userId    String?
+  patientId String?
+  type      String
+  channel   String
+  message   String
+  status    String
+  sentAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([clinicId, status])
+  @@index([clinicId, userId])
+}
+
+// ─── ENUMS ──────────────────────────────────────────────────
+
+enum Role {
+  OWNER
+  ADMIN
+  DOCTOR
+  RECEPTIONIST
+  NURSE
+  PHARMACIST
+  LAB_TECH
+}
+
+enum VisitType {
+  OPD
+  IPD
+  EMERGENCY
+}
+
+enum TokenStatus {
+  WAITING
+  CALLED
+  IN_PROGRESS
+  COMPLETED
+  EXPIRED
+  CANCELLED
+}
+
+enum ApptStatus {
+  SCHEDULED
+  CONFIRMED
+  CHECKED_IN
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PrescriptionStatus {
+  PENDING
+  SENT_TO_PHARMACY
+  DISPENSED
+  PARTIAL
+  CANCELLED
+}
+
+enum OrderStatus {
+  PENDING
+  DISPENSED
+  PARTIAL
+  CANCELLED
+}
+
+enum POStatus {
+  DRAFT
+  ORDERED
+  RECEIVED
+  CANCELLED
+}
+
+enum LabStatus {
+  ORDERED
+  SAMPLE_COLLECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum AdmissionStatus {
+  ADMITTED
+  DISCHARGED
+}
+
+enum BillType {
+  OPD
+  PHARMACY
+  IPD
+  LAB
+}
+
+enum BillStatus {
+  PENDING
+  PAID
+  PARTIAL
+  CANCELLED
+  REFUNDED
+}
