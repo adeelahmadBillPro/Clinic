@@ -17,6 +17,7 @@ import {
   Settings,
   Sparkles,
   AlertTriangle,
+  HelpCircle,
   type LucideIcon,
 } from "lucide-react";
 
@@ -37,6 +38,7 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Settings,
   Sparkles,
   AlertTriangle,
+  HelpCircle,
 };
 
 export function Icon({

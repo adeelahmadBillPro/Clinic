@@ -8,11 +8,13 @@ import {
   Sparkles,
   CreditCard,
   Check,
+  Banknote,
 } from "lucide-react";
 import { toast } from "sonner";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { ManualUpgradeDialog } from "./ManualUpgradeDialog";
 
 type Access = {
   clinicId: string;
@@ -56,6 +58,15 @@ export function SubscriptionPanel({
 }) {
   const [cycle, setCycle] = useState<"monthly" | "yearly">("monthly");
   const [busy, setBusy] = useState(false);
+  const [manualUpgrade, setManualUpgrade] = useState<
+    | {
+        planName: "BASIC" | "STANDARD" | "PRO";
+        cycle: "monthly" | "yearly" | "oneTime";
+      }
+    | null
+  >(null);
+
+  const stripeEnabled = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
   useEffect(() => {
     if (flash.success) toast.success("Subscription updated — thanks!");
@@ -271,7 +282,16 @@ export function SubscriptionPanel({
                   </Button>
                 ) : (
                   <Button
-                    onClick={() => subscribe(p.name)}
+                    onClick={() => {
+                      if (stripeEnabled) {
+                        subscribe(p.name);
+                      } else {
+                        setManualUpgrade({
+                          planName: p.name as "BASIC" | "STANDARD" | "PRO",
+                          cycle,
+                        });
+                      }
+                    }}
                     disabled={busy}
                     className="mt-5 w-full"
                     variant={p.name === "STANDARD" ? "default" : "outline"}
@@ -280,6 +300,11 @@ export function SubscriptionPanel({
                       <>
                         <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                         Opening...
+                      </>
+                    ) : !stripeEnabled ? (
+                      <>
+                        <Banknote className="mr-1.5 h-3.5 w-3.5" />
+                        Pay &amp; upgrade
                       </>
                     ) : (
                       "Subscribe"
@@ -290,15 +315,38 @@ export function SubscriptionPanel({
             );
           })}
         </div>
-        {!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY && (
-          <p className="mt-4 rounded-lg border border-dashed bg-muted/30 p-3 text-xs text-muted-foreground">
-            Stripe keys aren&rsquo;t configured in this environment. Subscribing
-            from here will require STRIPE_SECRET_KEY (server) and
-            NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY (client), plus a price id on each
-            Plan.
-          </p>
+        {!stripeEnabled && (
+          <div className="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                <Banknote className="h-4 w-4" />
+              </div>
+              <div className="text-sm">
+                <div className="font-semibold text-foreground">
+                  Online card payments coming soon
+                </div>
+                <div className="mt-0.5 text-xs text-muted-foreground">
+                  For now, pick a plan and pay via{" "}
+                  <span className="font-medium text-foreground">
+                    bank transfer, JazzCash, Easypaisa, or cash
+                  </span>
+                  . Submit your transaction reference and we&rsquo;ll verify
+                  + activate within 24 hours.
+                </div>
+              </div>
+            </div>
+          </div>
         )}
       </div>
+
+      {manualUpgrade && (
+        <ManualUpgradeDialog
+          open={!!manualUpgrade}
+          onOpenChange={(v) => !v && setManualUpgrade(null)}
+          planName={manualUpgrade.planName}
+          cycle={manualUpgrade.cycle}
+        />
+      )}
     </div>
   );
 }

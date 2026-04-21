@@ -130,6 +130,20 @@ export const NAV: NavGroup[] = [
         icon: "Sparkles",
         roles: ["OWNER"],
       },
+      {
+        label: "Getting started",
+        href: "/help",
+        icon: "HelpCircle",
+        roles: [
+          "OWNER",
+          "ADMIN",
+          "DOCTOR",
+          "RECEPTIONIST",
+          "NURSE",
+          "PHARMACIST",
+          "LAB_TECH",
+        ],
+      },
     ],
   },
 ];
