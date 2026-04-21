@@ -66,10 +66,19 @@ export function RegisterPatientForm({
   );
   const [issueTokenNow, setIssueTokenNow] = useState(true);
   const [doctors, setDoctors] = useState<
-    Array<{ id: string; name: string; specialization: string }>
+    Array<{
+      id: string;
+      name: string;
+      specialization: string;
+      consultationFee?: number;
+    }>
   >([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>("");
   const [chiefComplaint, setChiefComplaint] = useState<string>("");
+  const [feePaidNow, setFeePaidNow] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState<
+    "CASH" | "CARD" | "ONLINE" | "INSURANCE" | "PANEL"
+  >("CASH");
 
   useEffect(() => {
     let aborted = false;
@@ -122,6 +131,8 @@ export function RegisterPatientForm({
         autoIssueToken: issueTokenNow && !!selectedDoctorId,
         autoIssueDoctorId: issueTokenNow ? selectedDoctorId : undefined,
         autoIssueChiefComplaint: issueTokenNow ? chiefComplaint : undefined,
+        feePaidNow: issueTokenNow ? feePaidNow : undefined,
+        paymentMethod: issueTokenNow ? paymentMethod : undefined,
       };
       const res = await fetch("/api/patients", {
         method: "POST",
@@ -146,7 +157,11 @@ export function RegisterPatientForm({
         return;
       }
 
-      if (body.data.token) {
+      if (body.data.token && body.data.bill) {
+        toast.success(
+          `Patient registered · ${body.data.mrn} · Token ${body.data.token.displayToken} · Bill ${body.data.bill.billNumber} (${body.data.bill.status})`,
+        );
+      } else if (body.data.token) {
         toast.success(
           `Patient registered · ${body.data.mrn} · Token ${body.data.token.displayToken}`,
         );
@@ -509,6 +524,66 @@ export function RegisterPatientForm({
                   maxLength={200}
                 />
               </div>
+            </div>
+          )}
+
+          {/* Consultation fee collection — always shown once a doctor is
+              picked so reception knows whether to collect now or later. */}
+          {issueTokenNow && selectedDoctorId && (
+            <div className="mt-3 rounded-lg border border-dashed bg-background p-3 text-xs">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-medium text-foreground">
+                    Consultation fee:{" "}
+                    <span className="font-semibold">
+                      ₨{" "}
+                      {Math.round(
+                        doctors.find((d) => d.id === selectedDoctorId)
+                          ?.consultationFee ?? 0,
+                      ).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="mt-0.5 text-muted-foreground">
+                    A bill is always created. Pharmacy meds are billed
+                    separately — patient can skip pharmacy freely.
+                  </div>
+                </div>
+                <label className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={feePaidNow}
+                    onChange={(e) => setFeePaidNow(e.target.checked)}
+                    className="h-3.5 w-3.5 cursor-pointer rounded border-input accent-primary"
+                  />
+                  <span className="font-medium">Fee paid now</span>
+                </label>
+              </div>
+              {feePaidNow && (
+                <div className="mt-2 grid grid-cols-5 gap-1">
+                  {(["CASH", "CARD", "ONLINE", "INSURANCE", "PANEL"] as const).map(
+                    (m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setPaymentMethod(m)}
+                        className={cn(
+                          "rounded-md border px-2 py-1 text-[10px] font-medium transition",
+                          paymentMethod === m
+                            ? "border-primary bg-primary text-primary-foreground"
+                            : "bg-card hover:bg-accent/40",
+                        )}
+                      >
+                        {m}
+                      </button>
+                    ),
+                  )}
+                </div>
+              )}
+              {!feePaidNow && (
+                <div className="mt-2 rounded-md bg-amber-500/10 px-2 py-1 text-[11px] font-medium text-amber-700">
+                  Bill will be PENDING. Collect at reception after the visit.
+                </div>
+              )}
             </div>
           )}
         </div>

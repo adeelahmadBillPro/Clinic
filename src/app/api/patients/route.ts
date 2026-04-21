@@ -143,6 +143,15 @@ export async function POST(req: Request) {
 
   let token: { id: string; displayToken: string; doctorId: string } | null =
     null;
+  let bill: {
+    id: string;
+    billNumber: string;
+    totalAmount: number;
+    paidAmount: number;
+    balance: number;
+    status: string;
+  } | null = null;
+
   if (data.autoIssueToken && data.autoIssueDoctorId) {
     const doctor = await t.doctor.findFirst({
       where: { id: data.autoIssueDoctorId },
@@ -171,6 +180,59 @@ export async function POST(req: Request) {
         displayToken: created.displayToken,
         doctorId: doctor.id,
       };
+
+      // Create the consultation bill — always tracked, regardless of whether
+      // the patient later buys medicines at the clinic pharmacy.
+      const fee = Number(doctor.consultationFee);
+      if (fee > 0) {
+        const year = new Date().getFullYear();
+        const last = await t.bill.findFirst({
+          where: { billNumber: { startsWith: `BL-${year}-` } },
+          orderBy: { billNumber: "desc" },
+          select: { billNumber: true },
+        });
+        let nextNum = 1;
+        if (last?.billNumber) {
+          const match = last.billNumber.match(/-(\d+)$/);
+          if (match) nextNum = parseInt(match[1], 10) + 1;
+        }
+        const billNumber = `BL-${year}-${String(nextNum).padStart(4, "0")}`;
+
+        const paid = data.feePaidNow ? fee : 0;
+        const billRow = await t.bill.create({
+          data: {
+            clinicId: session.user.clinicId,
+            billNumber,
+            patientId: patient.id,
+            billType: "OPD" as const,
+            items: [
+              {
+                description: `Consultation — Dr. ${doctor.specialization}`,
+                qty: 1,
+                unitPrice: fee,
+                amount: fee,
+              },
+            ],
+            subtotal: fee,
+            discount: 0,
+            totalAmount: fee,
+            paidAmount: paid,
+            balance: fee - paid,
+            paymentMethod: data.paymentMethod ?? "CASH",
+            status:
+              paid >= fee ? "PAID" : paid > 0 ? "PARTIAL" : "PENDING",
+            collectedBy: session.user.id,
+          },
+        });
+        bill = {
+          id: billRow.id,
+          billNumber: billRow.billNumber,
+          totalAmount: Number(billRow.totalAmount),
+          paidAmount: Number(billRow.paidAmount),
+          balance: Number(billRow.balance),
+          status: billRow.status,
+        };
+      }
     }
   }
 
@@ -182,6 +244,7 @@ export async function POST(req: Request) {
       name: patient.name,
       phone: patient.phone,
       token,
+      bill,
     },
   });
 }

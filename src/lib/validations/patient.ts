@@ -37,6 +37,12 @@ export const createPatientSchema = z.object({
   autoIssueToken: z.boolean().optional(),
   autoIssueDoctorId: z.string().optional(),
   autoIssueChiefComplaint: z.string().max(200).optional(),
+  // Mark the consultation fee as already paid at the counter now.
+  // If false (default), bill is created but status = PENDING.
+  feePaidNow: z.boolean().optional(),
+  paymentMethod: z
+    .enum(["CASH", "CARD", "ONLINE", "INSURANCE", "PANEL"])
+    .optional(),
 });
 
 export type CreatePatientInput = z.infer<typeof createPatientSchema>;
