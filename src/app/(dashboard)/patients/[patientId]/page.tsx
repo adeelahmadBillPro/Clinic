@@ -85,6 +85,15 @@ export default async function PatientEmrPage({
       )
     : null;
 
+  // Outstanding consultation balance (PENDING / PARTIAL OPD bills)
+  const opdUnpaid = bills.filter(
+    (b) => b.billType === "OPD" && (b.status === "PENDING" || b.status === "PARTIAL"),
+  );
+  const outstanding = opdUnpaid.reduce(
+    (sum, b) => sum + Number(b.balance),
+    0,
+  );
+
   return (
     <div className="space-y-6">
       <Link
@@ -139,6 +148,19 @@ export default async function PatientEmrPage({
                 ))}
               </div>
             )}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {outstanding > 0 ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive">
+                  <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                  Fee unpaid · ₨ {Math.round(outstanding).toLocaleString()} owed
+                </span>
+              ) : bills.some((b) => b.billType === "OPD") ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Consultation fee paid
+                </span>
+              ) : null}
+            </div>
           </div>
           <div className="flex gap-2">
             <Link
@@ -274,13 +296,26 @@ export default async function PatientEmrPage({
                     : [];
                   return (
                     <li key={r.id} className="border-b pb-2 last:border-0">
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(r.createdAt).toLocaleDateString()} · {r.status}
-                      </div>
-                      <div className="text-xs">
-                        {meds.map((m) => m?.name).filter(Boolean).join(", ") ||
-                          "—"}
-                      </div>
+                      <Link
+                        href={`/prescriptions/${r.id}`}
+                        className="group flex items-start justify-between gap-2 rounded-md -mx-1 px-1 py-0.5 transition hover:bg-accent/40"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(r.createdAt).toLocaleDateString()} ·{" "}
+                            {r.status}
+                          </div>
+                          <div className="truncate text-xs">
+                            {meds
+                              .map((m) => m?.name)
+                              .filter(Boolean)
+                              .join(", ") || "—"}
+                          </div>
+                        </div>
+                        <span className="shrink-0 text-[11px] font-medium text-primary opacity-0 transition group-hover:opacity-100">
+                          Open →
+                        </span>
+                      </Link>
                     </li>
                   );
                 })}

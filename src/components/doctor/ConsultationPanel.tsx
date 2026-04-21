@@ -84,6 +84,7 @@ export function ConsultationPanel({
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [referOpen, setReferOpen] = useState(false);
+  const [outstanding, setOutstanding] = useState<number | null>(null);
 
   // Reset form when token changes
   useEffect(() => {
@@ -103,6 +104,23 @@ export function ConsultationPanel({
     setPrescriptionNotes("");
     setFollowUpDate("");
   }, [token.id, token.chiefComplaint]);
+
+  // Fetch fee/outstanding status for the current patient
+  useEffect(() => {
+    if (!patient?.id) return;
+    let aborted = false;
+    fetch(`/api/patients/${patient.id}`)
+      .then((r) => r.json())
+      .then((body) => {
+        if (!aborted && body?.success) {
+          setOutstanding(body.data.outstandingConsultation ?? 0);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      aborted = true;
+    };
+  }, [patient?.id]);
 
   const bmi =
     weight && height
@@ -217,6 +235,21 @@ export function ConsultationPanel({
             {patient?.mrn} · {patient?.phone} ·{" "}
             {patient?.gender === "M" ? "Male" : patient?.gender === "F" ? "Female" : "Other"}
           </div>
+          {outstanding !== null && (
+            <div className="mt-2">
+              {outstanding > 0 ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-2.5 py-1 text-[11px] font-semibold text-destructive">
+                  <span className="h-1.5 w-1.5 rounded-full bg-destructive" />
+                  Fee unpaid · ₨ {Math.round(outstanding).toLocaleString()} owed
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                  Consultation fee paid
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 

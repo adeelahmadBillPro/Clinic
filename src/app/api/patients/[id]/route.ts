@@ -26,7 +26,23 @@ export async function GET(
     );
   }
 
-  return NextResponse.json({ success: true, data: patient });
+  const unpaidOpd = await t.bill.findMany({
+    where: {
+      patientId: id,
+      billType: "OPD",
+      status: { in: ["PENDING", "PARTIAL"] },
+    },
+    select: { balance: true },
+  });
+  const outstanding = unpaidOpd.reduce(
+    (sum, b) => sum + Number(b.balance),
+    0,
+  );
+
+  return NextResponse.json({
+    success: true,
+    data: { ...patient, outstandingConsultation: outstanding },
+  });
 }
 
 export async function DELETE(

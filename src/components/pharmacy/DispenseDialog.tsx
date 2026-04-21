@@ -43,7 +43,7 @@ export function DispenseDialog({
 }: {
   order: PharmacyOrder;
   onClose: () => void;
-  onDone: () => void;
+  onDone: (billId?: string) => void;
 }) {
   const [rows, setRows] = useState<DispenseRow[]>(() =>
     order.items.map((i) => ({
@@ -145,7 +145,7 @@ export function DispenseDialog({
         return;
       }
       toast.success(`Dispensed · ${body.data.billNumber}`);
-      onDone();
+      onDone(body.data.billId);
     } catch {
       toast.error("Network error");
     } finally {
