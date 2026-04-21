@@ -55,9 +55,11 @@ type Token = {
 export function ConsultationPanel({
   token,
   onDone,
+  userId,
 }: {
   token: Token;
   onDone: () => void;
+  userId?: string;
 }) {
   const patient = token.patient;
 
@@ -312,6 +314,7 @@ export function ConsultationPanel({
             value={medicines}
             onChange={setMedicines}
             patientAllergies={patient?.allergies ?? []}
+            userId={userId}
           />
           {allergyInteractions.length > 0 && (
             <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-xs text-destructive">

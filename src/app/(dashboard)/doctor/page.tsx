@@ -30,6 +30,7 @@ export default async function DoctorPage() {
     <DoctorDesk
       isAdmin={isAdmin(session.user.role)}
       currentDoctorId={myDoctorId}
+      userId={session.user.id}
     />
   );
 }

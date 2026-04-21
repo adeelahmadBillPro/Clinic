@@ -64,9 +64,11 @@ const STATUS_BG: Record<string, string> = {
 export function DoctorDesk({
   isAdmin,
   currentDoctorId,
+  userId,
 }: {
   isAdmin: boolean;
   currentDoctorId: string | null;
+  userId: string;
 }) {
   const [allDoctors, setAllDoctors] = useState<Doctor[]>([]);
   const [selectedDoctorId, setSelectedDoctorId] = useState<string | null>(
@@ -304,6 +306,7 @@ export function DoctorDesk({
         {activeToken ? (
           <ConsultationPanel
             token={activeToken}
+            userId={userId}
             onDone={() => {
               setActiveTokenId(null);
               loadQueue();
