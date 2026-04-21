@@ -24,13 +24,42 @@ export const registerSchema = z
     phone: optionalPhoneSchema,
     password: strongPasswordSchema,
     confirmPassword: z.string(),
+    // Optional: solo-doctor fast path
+    isDoctor: z.boolean().optional(),
+    specialization: z.string().trim().max(100).optional(),
+    qualification: z.string().trim().max(200).optional(),
+    consultationFee: z
+      .union([z.number(), z.nan()])
+      .optional()
+      .transform((v) =>
+        typeof v === "number" && !isNaN(v) ? v : undefined,
+      ),
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
+  })
+  .superRefine((d, ctx) => {
+    if (d.isDoctor) {
+      if (!d.specialization || d.specialization.trim().length < 2) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["specialization"],
+          message: "Enter your specialization",
+        });
+      }
+      if (d.consultationFee === undefined || d.consultationFee < 0) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["consultationFee"],
+          message: "Enter your consultation fee",
+        });
+      }
+    }
   });
 
-export type RegisterInput = z.infer<typeof registerSchema>;
+export type RegisterInput = z.input<typeof registerSchema>;
+export type RegisterOutput = z.output<typeof registerSchema>;
 
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email"),

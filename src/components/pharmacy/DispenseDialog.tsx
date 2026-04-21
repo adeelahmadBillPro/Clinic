@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Loader2, Printer } from "lucide-react";
+import { Loader2, Printer, Minus, Plus, Pill, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -192,65 +192,60 @@ export function DispenseDialog({
               r.stockAvailable !== null &&
               r.stockAvailable > 0 &&
               r.stockAvailable < r.requestedQty;
+            const max =
+              r.stockAvailable !== null ? r.stockAvailable : r.requestedQty * 10;
             return (
               <motion.div
                 key={i}
                 layout
                 className={cn(
-                  "rounded-lg border p-3 text-sm",
-                  outOfStock && "border-destructive/30 bg-destructive/5",
-                  partial && !outOfStock && "border-amber-500/30 bg-amber-500/5",
+                  "group flex items-center gap-3 rounded-2xl border bg-card p-3 text-sm transition",
+                  outOfStock && "border-destructive/40 bg-destructive/5",
+                  partial && !outOfStock && "border-amber-500/40 bg-amber-500/5",
                 )}
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <div className="font-medium">{r.name}</div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      Requested <span className="font-medium text-foreground">{r.requestedQty}</span>{" "}
-                      {loading ? (
-                        <Loader2 className="ml-1 inline h-3 w-3 animate-spin" />
-                      ) : r.stockAvailable === null ? (
-                        <span className="text-muted-foreground">
-                          · not in inventory (manual)
-                        </span>
-                      ) : outOfStock ? (
-                        <span className="text-destructive">· out of stock</span>
-                      ) : partial ? (
-                        <span className="text-amber-700">
-                          · only {r.stockAvailable} in stock
-                        </span>
-                      ) : (
-                        <span className="text-emerald-700">
-                          · {r.stockAvailable} in stock
-                        </span>
-                      )}
-                    </div>
-                  </div>
+                {/* Pill / product icon block */}
+                <div
+                  className={cn(
+                    "flex h-14 w-14 shrink-0 items-center justify-center rounded-xl",
+                    outOfStock
+                      ? "bg-destructive/10 text-destructive"
+                      : partial
+                        ? "bg-amber-500/10 text-amber-700"
+                        : "bg-accent text-accent-foreground",
+                  )}
+                >
+                  <Pill className="h-6 w-6" />
                 </div>
-                <div className="mt-2 grid grid-cols-3 gap-2">
-                  <div>
-                    <Label className="text-[10px] text-muted-foreground">
-                      Dispense qty
-                    </Label>
-                    <Input
-                      type="number"
-                      min={0}
-                      max={
-                        r.stockAvailable !== null
-                          ? r.stockAvailable
-                          : undefined
-                      }
-                      value={r.dispensedQty}
-                      onChange={(e) =>
-                        updateRow(i, { dispensedQty: Number(e.target.value) })
-                      }
-                      className="h-8"
-                    />
+
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{r.name}</div>
+                  <div className="mt-0.5 text-[11px] text-muted-foreground">
+                    Requested{" "}
+                    <span className="font-medium text-foreground">
+                      {r.requestedQty}
+                    </span>
+                    {" · "}
+                    {loading ? (
+                      <Loader2 className="inline h-3 w-3 animate-spin" />
+                    ) : r.stockAvailable === null ? (
+                      <span>manual item</span>
+                    ) : outOfStock ? (
+                      <span className="font-medium text-destructive">
+                        out of stock
+                      </span>
+                    ) : partial ? (
+                      <span className="font-medium text-amber-700">
+                        only {r.stockAvailable} left
+                      </span>
+                    ) : (
+                      <span className="text-emerald-700">
+                        {r.stockAvailable} in stock
+                      </span>
+                    )}
                   </div>
-                  <div>
-                    <Label className="text-[10px] text-muted-foreground">
-                      Unit price (₨)
-                    </Label>
+                  <div className="mt-1 flex items-center gap-1.5 text-xs">
+                    <span className="text-muted-foreground">₨</span>
                     <Input
                       type="number"
                       min={0}
@@ -258,16 +253,60 @@ export function DispenseDialog({
                       onChange={(e) =>
                         updateRow(i, { unitPrice: Number(e.target.value) })
                       }
-                      className="h-8"
+                      className="h-6 w-20 px-1.5 text-xs"
                     />
-                  </div>
-                  <div className="flex flex-col justify-end text-right text-xs">
-                    <div className="text-muted-foreground">Subtotal</div>
-                    <div className="font-semibold tabular-nums">
-                      ₨ {Math.round(r.dispensedQty * r.unitPrice).toLocaleString()}
-                    </div>
+                    <span className="text-muted-foreground">per unit</span>
                   </div>
                 </div>
+
+                {/* Quantity stepper */}
+                <div className="flex flex-col items-end gap-1.5">
+                  <div className="inline-flex items-center rounded-full border bg-background p-0.5">
+                    <button
+                      type="button"
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-30"
+                      disabled={r.dispensedQty <= 0}
+                      onClick={() =>
+                        updateRow(i, {
+                          dispensedQty: Math.max(0, r.dispensedQty - 1),
+                        })
+                      }
+                      aria-label="Decrease"
+                    >
+                      <Minus className="h-3.5 w-3.5" />
+                    </button>
+                    <div className="min-w-8 text-center text-sm font-semibold tabular-nums">
+                      {r.dispensedQty}
+                    </div>
+                    <button
+                      type="button"
+                      className="flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition hover:bg-accent hover:text-foreground disabled:opacity-30"
+                      disabled={r.dispensedQty >= max}
+                      onClick={() =>
+                        updateRow(i, {
+                          dispensedQty: Math.min(max, r.dispensedQty + 1),
+                        })
+                      }
+                      aria-label="Increase"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <div className="text-sm font-semibold tabular-nums">
+                    ₨{" "}
+                    {Math.round(r.dispensedQty * r.unitPrice).toLocaleString()}
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => updateRow(i, { dispensedQty: 0 })}
+                  className="rounded-full p-1.5 text-muted-foreground opacity-0 transition hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                  aria-label="Skip this item"
+                  title="Set quantity to 0"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
               </motion.div>
             );
           })}

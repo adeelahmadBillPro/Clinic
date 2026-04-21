@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { createPatientSchema } from "@/lib/validations/patient";
 import { nextMrn } from "@/lib/mrn";
+import { nextTokenNumber, tokenExpiryFromNow } from "@/lib/token";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -140,6 +141,39 @@ export async function POST(req: Request) {
     },
   });
 
+  let token: { id: string; displayToken: string; doctorId: string } | null =
+    null;
+  if (data.autoIssueToken && data.autoIssueDoctorId) {
+    const doctor = await t.doctor.findFirst({
+      where: { id: data.autoIssueDoctorId },
+    });
+    if (doctor) {
+      const { tokenNumber, displayToken } = await nextTokenNumber(
+        session.user.clinicId,
+        doctor.id,
+      );
+      const created = await t.token.create({
+        data: {
+          clinicId: session.user.clinicId,
+          tokenNumber,
+          displayToken,
+          patientId: patient.id,
+          doctorId: doctor.id,
+          type: "OPD",
+          chiefComplaint: data.autoIssueChiefComplaint || null,
+          status: "WAITING",
+          issuedBy: session.user.id,
+          expiresAt: tokenExpiryFromNow(),
+        },
+      });
+      token = {
+        id: created.id,
+        displayToken: created.displayToken,
+        doctorId: doctor.id,
+      };
+    }
+  }
+
   return NextResponse.json({
     success: true,
     data: {
@@ -147,6 +181,7 @@ export async function POST(req: Request) {
       mrn: patient.mrn,
       name: patient.name,
       phone: patient.phone,
+      token,
     },
   });
 }

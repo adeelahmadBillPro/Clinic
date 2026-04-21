@@ -55,6 +55,12 @@ const ROLE_FLOWS: Record<
   Role_,
   { label: string; tagline: string; icon: typeof Users; steps: Step[] }
 > = {
+  SUPER_ADMIN: {
+    label: "Platform Admin",
+    tagline: "You run the platform — manage clinics from /admin.",
+    icon: Sparkles,
+    steps: [],
+  },
   OWNER: {
     label: "Owner / Admin",
     tagline: "Set up the clinic and watch everything live.",

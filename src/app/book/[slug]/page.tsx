@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
+import { getDoctorRatings } from "@/lib/reviews";
 import { PublicBookingForm } from "@/components/appointments/PublicBookingForm";
 import { Logo } from "@/components/shared/Logo";
 
@@ -39,16 +40,23 @@ export default async function PublicBookingPage({
 
   const t = db(clinic.id);
   const doctors = await t.doctor.findMany({ where: { isAvailable: true } });
-  const users = await prisma.user.findMany({
-    where: {
-      id: { in: doctors.map((d) => d.userId) },
-      isActive: true,
-    },
-    select: { id: true, name: true },
-  });
+  const [users, ratingMap] = await Promise.all([
+    prisma.user.findMany({
+      where: {
+        id: { in: doctors.map((d) => d.userId) },
+        isActive: true,
+      },
+      select: { id: true, name: true, photoUrl: true },
+    }),
+    getDoctorRatings(
+      clinic.id,
+      doctors.map((d) => d.id),
+    ),
+  ]);
   const doctorList = doctors
     .map((d) => {
       const u = users.find((x) => x.id === d.userId);
+      const r = ratingMap.get(d.id);
       return u
         ? {
             id: d.id,
@@ -56,6 +64,13 @@ export default async function PublicBookingPage({
             specialization: d.specialization,
             qualification: d.qualification,
             consultationFee: Number(d.consultationFee),
+            photoUrl: d.photoUrl ?? u.photoUrl ?? null,
+            experienceYears: d.experienceYears,
+            about: d.about,
+            languages: d.languages,
+            isAvailable: d.isAvailable,
+            rating: r ? Number(r.avg.toFixed(1)) : null,
+            reviewCount: r?.count ?? 0,
           }
         : null;
     })
@@ -65,12 +80,19 @@ export default async function PublicBookingPage({
     specialization: string;
     qualification: string;
     consultationFee: number;
+    photoUrl: string | null;
+    experienceYears: number;
+    about: string | null;
+    languages: string[];
+    isAvailable: boolean;
+    rating: number | null;
+    reviewCount: number;
   }>;
 
   return (
-    <div className="min-h-dvh bg-muted/30">
-      <header className="border-b bg-background">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-5">
+    <div className="min-h-dvh bg-background">
+      <header className="border-b bg-background/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
           <Logo />
           <div className="text-xs text-muted-foreground">
             Secure online booking
@@ -78,9 +100,9 @@ export default async function PublicBookingPage({
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-6 py-10">
-        <div className="mb-6 text-center">
-          <h1 className="text-3xl font-semibold tracking-tight">
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
             Book at {clinic.name}
           </h1>
           {clinic.address && (
@@ -92,7 +114,7 @@ export default async function PublicBookingPage({
 
         <PublicBookingForm slug={slug} doctors={doctorList} />
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
+        <p className="mt-8 text-center text-xs text-muted-foreground">
           By booking you agree to be contacted at the phone number provided.
         </p>
       </main>

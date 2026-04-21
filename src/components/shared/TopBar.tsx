@@ -3,6 +3,7 @@ import { MobileSidebar } from "./MobileSidebar";
 import { UserMenu } from "./UserMenu";
 import { ThemeToggle } from "./ThemeToggle";
 import { NotificationBell } from "./NotificationBell";
+import { SidebarCollapseToggle } from "./SidebarCollapseToggle";
 
 export async function TopBar({ clinicName }: { clinicName?: string }) {
   const session = await auth();
@@ -11,6 +12,7 @@ export async function TopBar({ clinicName }: { clinicName?: string }) {
   return (
     <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur-md sm:px-6">
       <MobileSidebar role={session.user.role} clinicName={clinicName} />
+      <SidebarCollapseToggle />
 
       <div className="flex flex-1 items-center gap-3">
         <div className="lg:hidden">

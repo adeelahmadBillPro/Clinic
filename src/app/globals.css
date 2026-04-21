@@ -15,51 +15,57 @@
 
 @layer base {
   :root {
-    /* ClinicOS — medical teal brand */
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.18 0.01 180);
+    /* ClinicOS — soft off-white canvas + pastel mint (inspired by calm medical UI) */
+    --background: oklch(0.975 0.004 170);
+    --foreground: oklch(0.16 0.015 180);
 
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.18 0.01 180);
+    --card-foreground: oklch(0.16 0.015 180);
 
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.18 0.01 180);
+    --popover-foreground: oklch(0.16 0.015 180);
 
-    --primary: oklch(0.46 0.09 168);
+    --primary: oklch(0.48 0.08 168);
     --primary-foreground: oklch(0.99 0 0);
 
-    --secondary: oklch(0.95 0.02 200);
-    --secondary-foreground: oklch(0.25 0.05 200);
+    --secondary: oklch(0.95 0.012 180);
+    --secondary-foreground: oklch(0.24 0.03 180);
 
-    --muted: oklch(0.97 0.005 200);
-    --muted-foreground: oklch(0.48 0.02 200);
+    --muted: oklch(0.955 0.005 180);
+    --muted-foreground: oklch(0.52 0.018 180);
 
-    --accent: oklch(0.93 0.04 168);
-    --accent-foreground: oklch(0.35 0.09 168);
+    /* Pastel mint accent to match the inspiration */
+    --accent: oklch(0.92 0.06 168);
+    --accent-foreground: oklch(0.32 0.08 168);
 
     --destructive: oklch(0.58 0.22 27);
     --destructive-foreground: oklch(0.99 0 0);
 
-    --border: oklch(0.92 0.01 200);
-    --input: oklch(0.92 0.01 200);
-    --ring: oklch(0.46 0.09 168);
+    --border: oklch(0.91 0.008 180);
+    --input: oklch(0.91 0.008 180);
+    --ring: oklch(0.48 0.08 168);
 
-    --chart-1: oklch(0.46 0.09 168);
-    --chart-2: oklch(0.60 0.13 210);
-    --chart-3: oklch(0.70 0.14 60);
-    --chart-4: oklch(0.62 0.17 15);
-    --chart-5: oklch(0.55 0.14 290);
+    --chart-1: oklch(0.72 0.10 168);
+    --chart-2: oklch(0.62 0.13 210);
+    --chart-3: oklch(0.74 0.14 80);
+    --chart-4: oklch(0.64 0.17 15);
+    --chart-5: oklch(0.60 0.12 290);
 
-    --radius: 0.625rem;
+    --radius: 0.75rem;
 
-    --sidebar: oklch(0.99 0.002 200);
-    --sidebar-foreground: oklch(0.22 0.02 200);
-    --sidebar-primary: oklch(0.46 0.09 168);
+    /* Sidebar is the softest surface, almost blending into the bg */
+    --sidebar: oklch(0.985 0.003 180);
+    --sidebar-foreground: oklch(0.22 0.02 180);
+    --sidebar-primary: oklch(0.48 0.08 168);
     --sidebar-primary-foreground: oklch(0.99 0 0);
-    --sidebar-accent: oklch(0.94 0.02 168);
-    --sidebar-accent-foreground: oklch(0.35 0.09 168);
-    --sidebar-border: oklch(0.92 0.01 200);
-    --sidebar-ring: oklch(0.46 0.09 168);
+    --sidebar-accent: oklch(0.93 0.05 168);
+    --sidebar-accent-foreground: oklch(0.32 0.08 168);
+    --sidebar-border: oklch(0.91 0.008 180);
+    --sidebar-ring: oklch(0.48 0.08 168);
+
+    /* Pastel mint pill used for small accents (e.g., appointment chips) */
+    --mint-soft: oklch(0.90 0.07 168);
+    --mint-soft-foreground: oklch(0.28 0.08 168);
   }
 
   .dark {
@@ -115,6 +121,10 @@
     @apply bg-background text-foreground;
     font-feature-settings: "cv11", "ss01";
     overflow-x: hidden;
+    background-image:
+      radial-gradient(1200px 600px at 90% -10%, oklch(0.92 0.06 168 / 0.35), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, oklch(0.90 0.04 200 / 0.25), transparent 55%);
+    background-attachment: fixed;
   }
   html {
     overflow-x: hidden;
@@ -131,6 +141,38 @@
       background-color 180ms ease,
       color 180ms ease;
   }
+}
+
+/* Sidebar collapse (desktop) — toggled via html.sidebar-collapsed */
+aside[data-sidebar="main"] {
+  transition:
+    width 220ms ease,
+    opacity 160ms ease,
+    transform 220ms ease;
+}
+.sidebar-collapsed aside[data-sidebar="main"] {
+  width: 0 !important;
+  min-width: 0 !important;
+  border-right-width: 0 !important;
+  overflow: hidden !important;
+  opacity: 0;
+  transform: translateX(-12px);
+  pointer-events: none;
+}
+
+/* Consistent card ring/shadow used across the app */
+.card-surface {
+  @apply rounded-2xl border bg-card ring-1 ring-inset;
+  --tw-ring-color: oklch(0.91 0.008 180 / 0.6);
+  box-shadow:
+    0 1px 2px 0 oklch(0 0 0 / 0.03),
+    0 6px 20px -8px oklch(0.46 0.09 168 / 0.06);
+}
+
+/* Soft pastel-mint pill — used for small accents (appointment chips, status) */
+.pill-mint {
+  background-color: var(--mint-soft);
+  color: var(--mint-soft-foreground);
 }
 
 /* Auth background — soft organic gradient */

@@ -32,6 +32,11 @@ export const createPatientSchema = z.object({
     .optional(),
   emergencyPhone: optionalPhoneSchema,
   forceCreate: z.boolean().optional(),
+  // Optional: issue a token immediately after registration so the patient
+  // appears in the doctor's queue in one click.
+  autoIssueToken: z.boolean().optional(),
+  autoIssueDoctorId: z.string().optional(),
+  autoIssueChiefComplaint: z.string().max(200).optional(),
 });
 
 export type CreatePatientInput = z.infer<typeof createPatientSchema>;

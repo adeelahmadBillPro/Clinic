@@ -21,6 +21,7 @@ const TENANT_MODELS = new Set([
   "cashShift",
   "auditLog",
   "notification",
+  "review",
 ]);
 
 const READ_OPS = new Set([

@@ -1,32 +1,38 @@
 import { z } from "zod";
 
 /**
- * Pakistan phone numbers, accepted formats:
- *   0300-1234567 / 03001234567
- *   +92 300 1234567 / +923001234567
- *   00923001234567
- * Any hyphens, spaces, parentheses stripped first.
- * Final digits must be 10 (after leading 0) or 12 (with 92 country code).
+ * Accepts:
+ *   - International E.164: +923001234567, +971501234567, +12025550123 (7–15 digits after +)
+ *   - PK-native shortcuts: 0300-1234567 / 03001234567
+ *   - 00-prefixed international: 00923001234567
+ * Any hyphens, spaces, parentheses, dots are stripped before validation.
  */
-const PK_PHONE_RE = /^(\+?92|0)?3\d{9}$/;
+const PK_LOCAL_RE = /^0?3\d{9}$/;
+const INTL_RE = /^\+\d{7,15}$/;
+
+function normalize(v: string): string {
+  const stripped = v.replace(/[\s\-().]/g, "");
+  if (stripped.startsWith("00")) return "+" + stripped.slice(2);
+  return stripped;
+}
 
 export const phoneSchema = z
   .string()
   .trim()
   .min(1, "Phone number is required")
-  .transform((v) => v.replace(/[\s\-().]/g, ""))
+  .transform(normalize)
   .refine(
-    (v) => PK_PHONE_RE.test(v),
-    "Enter a valid PK mobile — e.g. 0300-1234567",
+    (v) => INTL_RE.test(v) || PK_LOCAL_RE.test(v),
+    "Enter a valid mobile number — include country code (e.g. +92 300 1234567)",
   );
 
 export const optionalPhoneSchema = z
   .string()
   .trim()
-  .transform((v) => v.replace(/[\s\-().]/g, ""))
+  .transform(normalize)
   .refine(
-    (v) => v === "" || PK_PHONE_RE.test(v),
-    "Enter a valid PK mobile — e.g. 0300-1234567",
+    (v) => v === "" || INTL_RE.test(v) || PK_LOCAL_RE.test(v),
+    "Enter a valid mobile number — include country code (e.g. +92 300 1234567)",
   )
   .optional()
   .or(z.literal(""));

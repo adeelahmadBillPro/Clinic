@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PasswordInput } from "@/components/shared/PasswordInput";
+import { PhoneInput } from "@/components/shared/PhoneInput";
 import {
   addStaffSchema,
   type AddStaffInput,
@@ -60,6 +61,7 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
     watch,
     reset,
     setError,
+    control,
     formState: { errors },
   } = useForm<AddStaffInput>({
     resolver: zodResolver(addStaffSchema),
@@ -185,13 +187,20 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
             </div>
             <div>
               <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                type="tel"
-                className="mt-1.5"
-                placeholder="0300-1234567"
-                {...register("phone")}
-              />
+              <div className="mt-1.5">
+                <Controller
+                  control={control}
+                  name="phone"
+                  render={({ field }) => (
+                    <PhoneInput
+                      id="phone"
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      placeholder="300 1234567"
+                    />
+                  )}
+                />
+              </div>
             </div>
           </div>
 

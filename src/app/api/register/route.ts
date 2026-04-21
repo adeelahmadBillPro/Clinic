@@ -50,7 +50,17 @@ export async function POST(req: Request) {
     );
   }
 
-  const { name, clinicName, email, phone, password } = parsed.data;
+  const {
+    name,
+    clinicName,
+    email,
+    phone,
+    password,
+    isDoctor,
+    specialization,
+    qualification,
+    consultationFee,
+  } = parsed.data;
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
@@ -117,6 +127,23 @@ export async function POST(req: Request) {
         currentPeriodEnd: trialEndsAt,
       },
     });
+
+    // If the owner is also a practicing doctor, create their Doctor profile
+    if (isDoctor && specialization && consultationFee !== undefined) {
+      await tx.doctor.create({
+        data: {
+          clinicId: createdClinic.id,
+          userId: linked.id,
+          specialization,
+          qualification: qualification || "—",
+          consultationFee,
+          schedule: {},
+          isAvailable: true,
+          status: "AVAILABLE",
+        },
+      });
+    }
+
     return { user: linked, clinic: createdClinic };
   });
 

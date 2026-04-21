@@ -102,6 +102,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 });
 
 export const ROLE_HOME: Record<Role, string> = {
+  SUPER_ADMIN: "/admin",
   OWNER: "/dashboard",
   ADMIN: "/dashboard",
   DOCTOR: "/doctor",

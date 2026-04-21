@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, useAnimationControls } from "framer-motion";
 import { useRouter } from "next/navigation";
@@ -11,6 +11,7 @@ import { signIn } from "next-auth/react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/shared/PasswordInput";
+import { PhoneInput } from "@/components/shared/PhoneInput";
 import { PasswordStrengthMeter } from "@/components/shared/PasswordStrengthMeter";
 import { SubmitButton } from "@/components/shared/SubmitButton";
 import {
@@ -30,6 +31,7 @@ export function RegisterForm() {
     handleSubmit,
     watch,
     setError,
+    control,
     formState: { errors },
   } = useForm<RegisterInput>({
     resolver: zodResolver(registerSchema),
@@ -167,15 +169,21 @@ export function RegisterForm() {
               Phone{" "}
               <span className="text-muted-foreground">(optional)</span>
             </Label>
-            <Input
-              id="phone"
-              type="tel"
-              autoComplete="tel"
-              placeholder="0300-1234567"
-              aria-invalid={!!errors.phone}
-              className={cn("mt-1.5", errors.phone && "border-destructive")}
-              {...register("phone")}
-            />
+            <div className={cn("mt-1.5", errors.phone && "[&_input]:border-destructive")}>
+              <Controller
+                control={control}
+                name="phone"
+                render={({ field }) => (
+                  <PhoneInput
+                    id="phone"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    placeholder="300 1234567"
+                    autoComplete="tel"
+                  />
+                )}
+              />
+            </div>
             {errors.phone && (
               <p className="mt-1 text-xs text-destructive">
                 {errors.phone.message}
@@ -219,6 +227,75 @@ export function RegisterForm() {
             <p className="mt-1 text-xs text-destructive">
               {errors.confirmPassword.message}
             </p>
+          )}
+        </motion.div>
+
+        <motion.div variants={stackItem} className="rounded-xl border bg-muted/30 p-4">
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              {...register("isDoctor")}
+              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-input accent-primary"
+            />
+            <div className="flex-1">
+              <div className="text-sm font-medium">
+                I&rsquo;m also a practicing doctor
+              </div>
+              <div className="text-xs text-muted-foreground">
+                We&rsquo;ll set up your doctor profile so patients can book you and
+                tokens route to your queue instantly.
+              </div>
+            </div>
+          </label>
+
+          {watch("isDoctor") && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="specialization">Specialization</Label>
+                <Input
+                  id="specialization"
+                  placeholder="e.g. Dermatologist"
+                  className={cn(
+                    "mt-1.5",
+                    errors.specialization && "border-destructive",
+                  )}
+                  {...register("specialization")}
+                />
+                {errors.specialization && (
+                  <p className="mt-1 text-xs text-destructive">
+                    {errors.specialization.message}
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label htmlFor="qualification">Qualification</Label>
+                <Input
+                  id="qualification"
+                  placeholder="MBBS, FCPS"
+                  className="mt-1.5"
+                  {...register("qualification")}
+                />
+              </div>
+              <div>
+                <Label htmlFor="consultationFee">Consultation fee (₨)</Label>
+                <Input
+                  id="consultationFee"
+                  type="number"
+                  min={0}
+                  placeholder="1500"
+                  className={cn(
+                    "mt-1.5",
+                    errors.consultationFee && "border-destructive",
+                  )}
+                  {...register("consultationFee", { valueAsNumber: true })}
+                />
+                {errors.consultationFee && (
+                  <p className="mt-1 text-xs text-destructive">
+                    {errors.consultationFee.message}
+                  </p>
+                )}
+              </div>
+            </div>
           )}
         </motion.div>
 

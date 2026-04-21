@@ -25,7 +25,10 @@ export function Sidebar({
   const groups = navForRole(role, enabledModules);
 
   return (
-    <aside className="hidden w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-dvh lg:max-h-dvh">
+    <aside
+      data-sidebar="main"
+      className="hidden w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-dvh lg:max-h-dvh"
+    >
       <div className="flex h-16 items-center border-b px-5">
         <Link href="/dashboard" aria-label="ClinicOS">
           <Logo />

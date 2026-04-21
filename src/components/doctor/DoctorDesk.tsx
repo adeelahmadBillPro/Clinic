@@ -164,28 +164,51 @@ export function DoctorDesk({
               <div className="mb-1 text-xs font-medium text-muted-foreground">
                 Viewing queue for
               </div>
-              <Select
-                value={selectedDoctorId ?? ""}
-                onValueChange={(v) => {
-                  setSelectedDoctorId(v);
-                  setActiveTokenId(null);
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Pick a doctor">
-                    {selectedDoctor
-                      ? `${selectedDoctor.name} · ${selectedDoctor.specialization}`
-                      : undefined}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {allDoctors.map((d) => (
-                    <SelectItem key={d.id} value={d.id}>
-                      {d.name} · {d.specialization}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {allDoctors.length > 0 ? (
+                <Select
+                  value={selectedDoctorId ?? ""}
+                  onValueChange={(v) => {
+                    setSelectedDoctorId(v);
+                    setActiveTokenId(null);
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pick a doctor">
+                      {selectedDoctor
+                        ? `${selectedDoctor.name} · ${selectedDoctor.specialization}`
+                        : undefined}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {allDoctors.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name} · {d.specialization}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3 text-xs">
+                  <div className="font-semibold text-foreground">
+                    No doctors yet
+                  </div>
+                  <p className="mt-1 leading-relaxed text-muted-foreground">
+                    Add a doctor from{" "}
+                    <a href="/staff" className="font-medium text-primary hover:underline">
+                      Staff
+                    </a>
+                    , or if you see patients yourself, turn on your own doctor
+                    profile at{" "}
+                    <a
+                      href="/profile"
+                      className="font-medium text-primary hover:underline"
+                    >
+                      My profile
+                    </a>
+                    .
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

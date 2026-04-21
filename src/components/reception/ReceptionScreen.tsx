@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { UserPlus, CirclePlus } from "lucide-react";
 import { toast } from "sonner";
@@ -47,6 +48,8 @@ export function ReceptionScreen({
   const [selected, setSelected] = useState<SelectedPatient | null>(null);
   const [doctors, setDoctors] = useState(initialDoctors);
   const [registerOpen, setRegisterOpen] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
 
   const refreshDoctors = useCallback(async () => {
     const res = await fetch("/api/doctors");
@@ -59,6 +62,36 @@ export function ReceptionScreen({
     const i = setInterval(refreshDoctors, 15000);
     return () => clearInterval(i);
   }, [refreshDoctors]);
+
+  // Auto-select patient when linked via ?patient=<id>
+  useEffect(() => {
+    const patientId = searchParams.get("patient");
+    if (!patientId) return;
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/patients/${patientId}`);
+        const body = await res.json();
+        if (!aborted && body?.success) {
+          setSelected({
+            id: body.data.id,
+            mrn: body.data.mrn,
+            name: body.data.name,
+            phone: body.data.phone,
+            gender: body.data.gender,
+            allergies: body.data.allergies ?? [],
+          });
+          // Strip query param from the URL so refresh doesn't repeat the load
+          router.replace("/reception");
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+  }, [searchParams, router]);
 
   function onPickExisting(h: PatientHit) {
     setSelected({

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,6 +21,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { TagInput } from "./TagInput";
 import { DatePicker } from "@/components/shared/DatePicker";
+import { PhoneInput } from "@/components/shared/PhoneInput";
 import {
   createPatientSchema,
   type CreatePatientInput,
@@ -63,6 +64,28 @@ export function RegisterPatientForm({
   const [pendingValues, setPendingValues] = useState<CreatePatientInput | null>(
     null,
   );
+  const [issueTokenNow, setIssueTokenNow] = useState(true);
+  const [doctors, setDoctors] = useState<
+    Array<{ id: string; name: string; specialization: string }>
+  >([]);
+  const [selectedDoctorId, setSelectedDoctorId] = useState<string>("");
+  const [chiefComplaint, setChiefComplaint] = useState<string>("");
+
+  useEffect(() => {
+    let aborted = false;
+    fetch("/api/doctors")
+      .then((r) => r.json())
+      .then((body) => {
+        if (!aborted && body?.success) {
+          setDoctors(body.data);
+          if (body.data.length > 0) setSelectedDoctorId(body.data[0].id);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      aborted = true;
+    };
+  }, []);
 
   const {
     register,
@@ -93,10 +116,17 @@ export function RegisterPatientForm({
   async function submit(values: CreatePatientInput, forceCreate = false) {
     setSubmitting(true);
     try {
+      const payload = {
+        ...values,
+        forceCreate,
+        autoIssueToken: issueTokenNow && !!selectedDoctorId,
+        autoIssueDoctorId: issueTokenNow ? selectedDoctorId : undefined,
+        autoIssueChiefComplaint: issueTokenNow ? chiefComplaint : undefined,
+      };
       const res = await fetch("/api/patients", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...values, forceCreate }),
+        body: JSON.stringify(payload),
       });
       const body = await res.json().catch(() => ({}));
 
@@ -116,7 +146,13 @@ export function RegisterPatientForm({
         return;
       }
 
-      toast.success(`Patient registered · ${body.data.mrn}`);
+      if (body.data.token) {
+        toast.success(
+          `Patient registered · ${body.data.mrn} · Token ${body.data.token.displayToken}`,
+        );
+      } else {
+        toast.success(`Patient registered · ${body.data.mrn}`);
+      }
       onCreated?.(body.data);
     } catch {
       toast.error("Network error");
@@ -216,14 +252,20 @@ export function RegisterPatientForm({
           <Label htmlFor="p-phone">
             Phone <span className="text-destructive">*</span>
           </Label>
-          <Input
-            id="p-phone"
-            type="tel"
-            className={cn("mt-1.5", errors.phone && "border-destructive")}
-            placeholder="0300-1234567"
-            aria-invalid={!!errors.phone}
-            {...register("phone")}
-          />
+          <div className={cn("mt-1.5", errors.phone && "[&_input]:border-destructive")}>
+            <Controller
+              control={control}
+              name="phone"
+              render={({ field }) => (
+                <PhoneInput
+                  id="p-phone"
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  placeholder="300 1234567"
+                />
+              )}
+            />
+          </div>
           {errors.phone && (
             <p className="mt-1 text-xs text-destructive">
               {errors.phone.message}
@@ -377,15 +419,100 @@ export function RegisterPatientForm({
         </div>
         <div>
           <Label htmlFor="p-emergency-phone">Emergency contact phone</Label>
-          <Input
-            id="p-emergency-phone"
-            type="tel"
-            className="mt-1.5"
-            placeholder="0300-1234567"
-            {...register("emergencyPhone")}
-          />
+          <div className="mt-1.5">
+            <Controller
+              control={control}
+              name="emergencyPhone"
+              render={({ field }) => (
+                <PhoneInput
+                  id="p-emergency-phone"
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  placeholder="300 1234567"
+                />
+              )}
+            />
+          </div>
         </div>
       </div>
+
+      {/* Auto-issue token section — always visible when a doctor exists */}
+      {doctors.length > 0 && (
+        <div
+          className={cn(
+            "rounded-xl border p-4 transition",
+            issueTokenNow
+              ? "border-primary/40 bg-accent/30"
+              : "border-dashed bg-muted/20",
+          )}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                {issueTokenNow ? (
+                  <>
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                      ✓
+                    </span>
+                    Token will be issued automatically
+                  </>
+                ) : (
+                  <>Token issue skipped</>
+                )}
+              </div>
+              <div className="mt-0.5 text-xs text-muted-foreground">
+                {issueTokenNow
+                  ? "Next available token number will be assigned and the patient added to the doctor's queue instantly."
+                  : "Patient will be registered only. You can issue a token later from Reception."}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIssueTokenNow(!issueTokenNow)}
+              className="shrink-0 rounded-full border bg-card px-3 py-1 text-xs font-medium transition hover:bg-accent/60"
+            >
+              {issueTokenNow ? "Skip token" : "Enable token"}
+            </button>
+          </div>
+
+          {issueTokenNow && (
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label className="text-xs">Doctor</Label>
+                <Select
+                  value={selectedDoctorId}
+                  onValueChange={(v) => v && setSelectedDoctorId(v)}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue>
+                      {doctors.find((d) => d.id === selectedDoctorId)
+                        ? `${doctors.find((d) => d.id === selectedDoctorId)?.name} · ${doctors.find((d) => d.id === selectedDoctorId)?.specialization}`
+                        : undefined}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {doctors.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name} · {d.specialization}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs">Chief complaint (optional)</Label>
+                <Input
+                  className="mt-1"
+                  value={chiefComplaint}
+                  onChange={(e) => setChiefComplaint(e.target.value)}
+                  placeholder="e.g. fever + cough x 3 days"
+                  maxLength={200}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="flex justify-end">
         <Button type="submit" disabled={submitting}>
@@ -394,6 +521,8 @@ export function RegisterPatientForm({
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
               Registering...
             </>
+          ) : issueTokenNow ? (
+            "Register & issue token"
           ) : (
             "Register patient"
           )}

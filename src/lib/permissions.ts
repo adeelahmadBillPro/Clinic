@@ -145,6 +145,20 @@ export const NAV: NavGroup[] = [
         roles: ["OWNER"],
       },
       {
+        label: "My profile",
+        href: "/profile",
+        icon: "UserCircle",
+        roles: [
+          "OWNER",
+          "ADMIN",
+          "DOCTOR",
+          "RECEPTIONIST",
+          "NURSE",
+          "PHARMACIST",
+          "LAB_TECH",
+        ],
+      },
+      {
         label: "Getting started",
         href: "/help",
         icon: "HelpCircle",
@@ -190,6 +204,7 @@ export function navForRole(
 export function bottomBarForRole(role: Role): NavItem[] {
   // First 4 most useful items per role for mobile
   const perRole: Record<Role, string[]> = {
+    SUPER_ADMIN: [],
     OWNER: ["/dashboard", "/reception", "/patients", "/billing"],
     ADMIN: ["/dashboard", "/reception", "/patients", "/billing"],
     DOCTOR: ["/doctor", "/patients", "/appointments", "/lab"],

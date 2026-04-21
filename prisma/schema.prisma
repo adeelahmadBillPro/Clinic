@@ -21,6 +21,7 @@ model User {
   password             String
   role                 Role
   clinicId             String?
+  photoUrl             String?
   isActive             Boolean   @default(true)
   lastLoginAt          DateTime?
   failedLoginAttempts  Int       @default(0)
@@ -74,6 +75,29 @@ model Subscription {
   createdAt            DateTime  @default(now())
 }
 
+model UpgradeRequest {
+  id              String    @id @default(cuid())
+  clinicId        String
+  submittedBy     String
+  submitterName   String
+  submitterEmail  String
+  planName        String
+  cycle           String
+  method          String
+  referenceNumber String
+  amountPaid      Decimal
+  notes           String?
+  status          String    @default("PENDING") // PENDING | APPROVED | REJECTED
+  reviewedBy      String?
+  reviewerName    String?
+  reviewedAt      DateTime?
+  reviewNotes     String?
+  createdAt       DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([clinicId])
+}
+
 // ─── TENANT MODELS (row-level isolation via clinicId) ──────
 
 model Patient {
@@ -100,18 +124,41 @@ model Patient {
   @@index([clinicId, name])
 }
 
+model Review {
+  id             String   @id @default(cuid())
+  clinicId       String
+  doctorId       String
+  appointmentId  String?
+  patientId      String?
+  reviewerName   String
+  reviewerPhone  String?
+  rating         Int
+  comment        String?
+  isPublished    Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  @@index([clinicId, doctorId])
+  @@index([clinicId, createdAt])
+}
+
 model Doctor {
-  id              String  @id @default(cuid())
+  id              String   @id @default(cuid())
   clinicId        String
-  userId          String  @unique
+  userId          String   @unique
   specialization  String
   qualification   String
   roomNumber      String?
   consultationFee Decimal
-  isAvailable     Boolean @default(true)
-  status          String  @default("AVAILABLE")
+  isAvailable     Boolean  @default(true)
+  status          String   @default("AVAILABLE")
   schedule        Json
-  revenueSharePct Decimal @default(0)
+  revenueSharePct Decimal  @default(0)
+  photoUrl        String?
+  experienceYears Int      @default(0)
+  about           String?
+  languages       String[] @default([])
+  gender          String?
+  whatsappNumber  String?
 
   @@index([clinicId])
 }
@@ -455,6 +502,7 @@ model Notification {
 // ─── ENUMS ──────────────────────────────────────────────────
 
 enum Role {
+  SUPER_ADMIN
   OWNER
   ADMIN
   DOCTOR

@@ -44,8 +44,23 @@ export async function POST(req: Request) {
     select: { name: true, ownerId: true },
   });
 
-  // Store the request as a notification addressed to the clinic owner
-  // (and also log it in the audit trail).
+  // Proper platform-level queue row for super admin
+  await prisma.upgradeRequest.create({
+    data: {
+      clinicId: session.user.clinicId,
+      submittedBy: session.user.id,
+      submitterName: session.user.name ?? "User",
+      submitterEmail: session.user.email ?? "",
+      planName: parsed.data.planName,
+      cycle: parsed.data.cycle,
+      method: parsed.data.method,
+      referenceNumber: parsed.data.referenceNumber,
+      amountPaid: parsed.data.amountPaid,
+      notes: parsed.data.notes ?? null,
+    },
+  });
+
+  // Also echo to the clinic owner's in-app inbox so they see their own request
   await t.notification.create({
     data: {
       clinicId: session.user.clinicId,

@@ -6,6 +6,8 @@ import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
 import { TopBar } from "@/components/shared/TopBar";
 import { TrialBanner } from "@/components/shared/TrialBanner";
 import { SidebarUser } from "@/components/shared/SidebarUser";
+import { AccessDeniedToast } from "@/components/shared/AccessDeniedToast";
+import { Suspense } from "react";
 
 export default async function DashboardLayout({
   children,
@@ -50,6 +52,9 @@ export default async function DashboardLayout({
         <TopBar clinicName={clinic?.name} />
 
         <main className="flex-1 overflow-x-hidden px-4 pb-24 pt-6 sm:px-6 lg:pb-10">
+          <Suspense fallback={null}>
+            <AccessDeniedToast />
+          </Suspense>
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>

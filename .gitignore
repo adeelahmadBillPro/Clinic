@@ -43,3 +43,7 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# user-uploaded files (keep the folder, ignore uploads)
+/public/uploads/avatars/*
+!/public/uploads/avatars/.gitkeep
