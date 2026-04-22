@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { createPatientSchema } from "@/lib/validations/patient";
@@ -235,6 +236,11 @@ export async function POST(req: Request) {
       }
     }
   }
+
+  revalidatePath("/patients");
+  revalidatePath("/reception");
+  revalidatePath("/doctor");
+  revalidatePath("/billing");
 
   return NextResponse.json({
     success: true,

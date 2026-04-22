@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import { DeletePatientButton } from "@/components/patients/DeletePatientButton";
 import { EditPatientDialog } from "@/components/patients/EditPatientDialog";
+import { PatientActivityTimeline } from "@/components/patients/PatientActivityTimeline";
 import { isAdmin } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
@@ -386,6 +387,8 @@ export default async function PatientEmrPage({
           </CardContent>
         </Card>
       </div>
+
+      <PatientActivityTimeline patientId={patient.id} />
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import {
   Sparkles,
   Users,
@@ -237,6 +238,28 @@ function ReceptionBlock({ s }: { s: ReceptionStats }) {
 }
 
 function PharmacyBlock({ s }: { s: PharmacyStats }) {
+  const [opening, setOpening] = useState(false);
+  async function openShift() {
+    setOpening(true);
+    try {
+      const res = await fetch("/api/cash-shifts/open", { method: "POST" });
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        toast.error(body?.error ?? "Could not open shift");
+        return;
+      }
+      if (body.data?.alreadyOpen) {
+        toast("Shift is already open");
+      } else {
+        toast.success("Shift opened — you can collect payments now");
+      }
+      // Refresh stats by reloading the page — cheap + reliable
+      window.location.reload();
+    } finally {
+      setOpening(false);
+    }
+  }
+
   return (
     <>
       <div className="grid gap-2 sm:grid-cols-3">
@@ -259,13 +282,29 @@ function PharmacyBlock({ s }: { s: PharmacyStats }) {
           tone={s.shiftOpen ? "success" : "default"}
         />
       </div>
-      {!s.shiftOpen && (
-        <div className="mt-2 rounded-md border border-dashed bg-muted/30 p-2 text-[11px] text-muted-foreground">
-          Open a cash shift from{" "}
-          <a href="/billing/shift" className="font-medium text-primary hover:underline">
-            Cash shifts
-          </a>{" "}
-          before collecting payments.
+      {!s.shiftOpen ? (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md border border-dashed bg-muted/30 p-2.5 text-[11px]">
+          <span className="text-muted-foreground">
+            Open your cash shift before collecting payments.
+          </span>
+          <button
+            type="button"
+            onClick={openShift}
+            disabled={opening}
+            className="inline-flex h-7 items-center gap-1 rounded-md bg-primary px-2.5 text-[11px] font-semibold text-primary-foreground shadow-sm transition hover:brightness-95 disabled:opacity-60"
+          >
+            {opening ? "Opening..." : "Open shift now"}
+          </button>
+        </div>
+      ) : (
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-md bg-emerald-500/10 p-2.5 text-[11px] text-emerald-800">
+          <span>Your shift is open. Declare and close it from Cash shifts at end of day.</span>
+          <a
+            href="/billing/shift"
+            className="font-medium underline underline-offset-2 hover:text-emerald-900"
+          >
+            Cash shifts →
+          </a>
         </div>
       )}
     </>

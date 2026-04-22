@@ -27,13 +27,16 @@ export async function POST(req: Request) {
 
   const ext = file.type === "image/png" ? ".png" : file.type === "image/webp" ? ".webp" : ".jpg";
   const name = `${randomUUID()}${ext}`;
-  const dir = path.join(process.cwd(), "public", "uploads", "avatars");
+  // Store outside /public so Next.js's static asset serving doesn't
+  // coexist uneasily with runtime-written files (which was returning 404
+  // in production). Files are streamed via /api/files/avatars/[name].
+  const dir = path.join(process.cwd(), "uploads", "avatars");
   await mkdir(dir, { recursive: true });
   const buf = Buffer.from(await file.arrayBuffer());
   await writeFile(path.join(dir, name), buf);
 
   return NextResponse.json({
     success: true,
-    data: { url: `/uploads/avatars/${name}` },
+    data: { url: `/api/files/avatars/${name}` },
   });
 }

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
@@ -126,6 +127,7 @@ export async function PATCH(
         },
       },
     });
+    revalidatePath("/inventory/purchase-orders");
     return NextResponse.json({ success: true });
   }
 

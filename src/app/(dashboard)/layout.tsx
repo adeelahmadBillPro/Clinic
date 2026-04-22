@@ -36,7 +36,10 @@ export default async function DashboardLayout({
       ?.modules ?? {};
 
   return (
-    <div className="flex min-h-dvh bg-muted/30">
+    <div
+      data-dashboard-shell
+      className="min-h-dvh bg-muted/30 transition-[padding] duration-200 ease-out lg:pl-64"
+    >
       <Sidebar
         role={session.user.role}
         clinicName={clinic?.name}

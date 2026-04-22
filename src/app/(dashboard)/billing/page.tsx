@@ -18,17 +18,36 @@ export default async function BillingPage() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
+  // Role-based filter on which bills this user should see / collect
+  const role = session.user.role;
+  const scopedTypeFilter: Record<string, unknown> =
+    role === "PHARMACIST"
+      ? { billType: "PHARMACY" }
+      : role === "RECEPTIONIST"
+        ? { billType: { in: ["OPD", "LAB", "IPD"] } }
+        : role === "LAB_TECH"
+          ? { billType: "LAB" }
+          : {}; // OWNER / ADMIN / DOCTOR see everything
+
   const [bills, todaySum, pendingCount] = await Promise.all([
     t.bill.findMany({
+      where: scopedTypeFilter,
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
     t.bill.aggregate({
-      where: { createdAt: { gte: today }, status: { in: ["PAID", "PARTIAL"] } },
+      where: {
+        ...scopedTypeFilter,
+        createdAt: { gte: today },
+        status: { in: ["PAID", "PARTIAL"] },
+      },
       _sum: { paidAmount: true },
     }),
     t.bill.count({
-      where: { status: { in: ["PENDING", "PARTIAL"] } },
+      where: {
+        ...scopedTypeFilter,
+        status: { in: ["PENDING", "PARTIAL"] },
+      },
     }),
   ]);
 

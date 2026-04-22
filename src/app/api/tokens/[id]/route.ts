@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
@@ -138,6 +139,10 @@ export async function PATCH(
       }
     })();
   }
+
+  revalidatePath("/reception");
+  revalidatePath("/doctor");
+  revalidatePath("/dashboard");
 
   return NextResponse.json({
     success: true,

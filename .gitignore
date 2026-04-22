@@ -44,6 +44,8 @@ next-env.d.ts
 
 /src/generated/prisma
 
-# user-uploaded files (keep the folder, ignore uploads)
+# user-uploaded files (stored outside /public, served via /api/files)
+/uploads/
+# (legacy path, kept for older builds)
 /public/uploads/avatars/*
 !/public/uploads/avatars/.gitkeep

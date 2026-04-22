@@ -1,9 +1,10 @@
 "use client";
 
-import { Printer, Share2, Copy, CheckCircle2 } from "lucide-react";
-import { useState } from "react";
+import { Printer, Share2, Copy, CheckCircle2, Download, Loader2 } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { downloadPdf } from "@/lib/download-pdf";
 
 type Medicine = {
   name: string;
@@ -71,6 +72,24 @@ function rxTextSummary(p: Props): string {
 
 export function PrescriptionPrintView(props: Props) {
   const [copied, setCopied] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const sheetRef = useRef<HTMLDivElement>(null);
+
+  async function download() {
+    if (!sheetRef.current) return;
+    setDownloading(true);
+    try {
+      const filename = `Rx-${props.patient.mrn}-${new Date(props.rx.createdAt)
+        .toISOString()
+        .slice(0, 10)}`;
+      await downloadPdf(sheetRef.current, filename);
+      toast.success("Prescription PDF downloaded");
+    } catch {
+      toast.error("Could not generate PDF");
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   function print() {
     window.print();
@@ -104,7 +123,20 @@ export function PrescriptionPrintView(props: Props) {
       <div className="no-print mb-4 flex flex-wrap gap-2">
         <Button onClick={print}>
           <Printer className="mr-1.5 h-4 w-4" />
-          Print / Save as PDF
+          Print
+        </Button>
+        <Button variant="outline" onClick={download} disabled={downloading}>
+          {downloading ? (
+            <>
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              Preparing PDF...
+            </>
+          ) : (
+            <>
+              <Download className="mr-1.5 h-4 w-4" />
+              Download PDF
+            </>
+          )}
         </Button>
         <Button variant="outline" onClick={copy}>
           {copied ? (
@@ -126,7 +158,10 @@ export function PrescriptionPrintView(props: Props) {
       </div>
 
       {/* Printable sheet */}
-      <div className="rx-sheet rounded-xl border bg-white p-8 text-black shadow-sm print:border-0 print:p-0 print:shadow-none">
+      <div
+        ref={sheetRef}
+        className="rx-sheet rounded-xl border bg-white p-8 text-black shadow-sm print:border-0 print:p-0 print:shadow-none"
+      >
         {/* Header */}
         <div className="flex items-start justify-between border-b-2 border-emerald-700 pb-4">
           <div>

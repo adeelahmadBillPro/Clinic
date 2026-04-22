@@ -159,6 +159,13 @@ aside[data-sidebar="main"] {
   transform: translateX(-12px);
   pointer-events: none;
 }
+/* When sidebar is collapsed, also remove the reserved left padding on
+   the dashboard shell so main content fills the full width. */
+@media (min-width: 1024px) {
+  .sidebar-collapsed body [data-dashboard-shell] {
+    padding-left: 0 !important;
+  }
+}
 
 /* Consistent card ring/shadow used across the app */
 .card-surface {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { issueTokenSchema } from "@/lib/validations/token";
@@ -113,6 +114,19 @@ export async function POST(req: Request) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
       { status: 401 },
+    );
+  }
+
+  // Only reception / nurse / admin can issue tokens — doctors consult,
+  // they don't issue queue numbers. Pharmacist / lab tech are blocked.
+  const allowedIssuers = ["OWNER", "ADMIN", "RECEPTIONIST", "NURSE"];
+  if (!allowedIssuers.includes(session.user.role)) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Only reception / admin can issue tokens.",
+      },
+      { status: 403 },
     );
   }
 
@@ -303,6 +317,11 @@ export async function POST(req: Request) {
 
     return { token, billId };
   });
+
+  revalidatePath("/reception");
+  revalidatePath("/doctor");
+  revalidatePath("/billing");
+  revalidatePath("/dashboard");
 
   return NextResponse.json({
     success: true,

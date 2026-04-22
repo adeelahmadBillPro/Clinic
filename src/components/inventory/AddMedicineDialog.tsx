@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -38,6 +39,7 @@ const CATEGORIES = [
 const UNITS = ["tablet", "capsule", "ml", "mg", "g", "unit", "vial", "bottle"];
 
 export function AddMedicineDialog({ onCreated }: { onCreated?: () => void }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -89,6 +91,7 @@ export function AddMedicineDialog({ onCreated }: { onCreated?: () => void }) {
       toast.success(`${form.name} added to inventory`);
       setOpen(false);
       onCreated?.();
+      router.refresh();
       setForm({
         name: "",
         genericName: "",

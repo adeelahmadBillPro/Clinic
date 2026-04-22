@@ -1,14 +1,19 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
 
 const schema = z.object({
-  name: z.string().trim().min(1).max(200),
-  contact: z.string().optional(),
-  phone: z.string().optional(),
+  name: z.string().trim().min(2, "Name too short").max(200),
+  contact: z.string().trim().max(100).optional(),
+  phone: z
+    .string()
+    .trim()
+    .min(1, "Phone number is required")
+    .max(30, "Phone too long"),
   email: z.string().email().optional().or(z.literal("")),
-  address: z.string().optional(),
+  address: z.string().trim().max(300).optional(),
 });
 
 export async function GET() {
@@ -48,10 +53,14 @@ export async function POST(req: Request) {
       clinicId: session.user.clinicId,
       name: parsed.data.name,
       contact: parsed.data.contact || null,
-      phone: parsed.data.phone || null,
+      phone: parsed.data.phone,
       email: parsed.data.email || null,
       address: parsed.data.address || null,
     },
   });
+
+  revalidatePath("/inventory/suppliers");
+  revalidatePath("/inventory/purchase-orders");
+
   return NextResponse.json({ success: true, data: supplier });
 }

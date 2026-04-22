@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Plus, Loader2, Phone, Mail, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { PhoneInput } from "@/components/shared/PhoneInput";
 
 import {
   Dialog,
@@ -43,7 +44,19 @@ export function SuppliersClient({ initial }: { initial: Supplier[] }) {
 
   async function save() {
     if (!form.name.trim()) {
-      toast.error("Name required");
+      toast.error("Supplier name is required");
+      return;
+    }
+    if (form.name.trim().length < 2) {
+      toast.error("Name too short");
+      return;
+    }
+    if (!form.phone.trim()) {
+      toast.error("Phone number is required to contact supplier");
+      return;
+    }
+    if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) {
+      toast.error("Enter a valid email or leave it empty");
       return;
     }
     setSubmitting(true);
@@ -83,11 +96,14 @@ export function SuppliersClient({ initial }: { initial: Supplier[] }) {
             </DialogHeader>
             <div className="space-y-3">
               <div>
-                <Label>Name</Label>
+                <Label>
+                  Supplier name <span className="text-destructive">*</span>
+                </Label>
                 <Input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="mt-1"
+                  placeholder="ABC Pharma"
                 />
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -99,15 +115,20 @@ export function SuppliersClient({ initial }: { initial: Supplier[] }) {
                       setForm({ ...form, contact: e.target.value })
                     }
                     className="mt-1"
+                    placeholder="Sales rep name"
                   />
                 </div>
                 <div>
-                  <Label>Phone</Label>
-                  <Input
-                    value={form.phone}
-                    onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                    className="mt-1"
-                  />
+                  <Label>
+                    Phone <span className="text-destructive">*</span>
+                  </Label>
+                  <div className="mt-1">
+                    <PhoneInput
+                      value={form.phone}
+                      onChange={(v) => setForm({ ...form, phone: v })}
+                      placeholder="300 1234567"
+                    />
+                  </div>
                 </div>
               </div>
               <div>
@@ -117,6 +138,7 @@ export function SuppliersClient({ initial }: { initial: Supplier[] }) {
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   className="mt-1"
+                  placeholder="sales@supplier.com"
                 />
               </div>
               <div>
@@ -127,6 +149,7 @@ export function SuppliersClient({ initial }: { initial: Supplier[] }) {
                     setForm({ ...form, address: e.target.value })
                   }
                   className="mt-1"
+                  placeholder="Street, area, city"
                 />
               </div>
             </div>

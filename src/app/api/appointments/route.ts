@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
@@ -116,6 +117,10 @@ export async function POST(req: Request) {
       bookedVia: parsed.data.bookedVia,
     },
   });
+
+  revalidatePath("/appointments");
+  revalidatePath("/reception");
+
   return NextResponse.json({
     success: true,
     data: {

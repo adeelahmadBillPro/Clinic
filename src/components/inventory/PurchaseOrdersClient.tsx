@@ -164,7 +164,9 @@ export function PurchaseOrdersClient({
               <Label>Supplier</Label>
               <Select value={supplierId} onValueChange={(v) => v && setSupplierId(v)}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue />
+                  <SelectValue placeholder="Pick a supplier">
+                    {suppliers.find((s) => s.id === supplierId)?.name}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {suppliers.map((s) => (

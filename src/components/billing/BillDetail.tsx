@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { Printer, MessageCircle, BadgeDollarSign, Loader2 } from "lucide-react";
+import { Printer, MessageCircle, BadgeDollarSign, Loader2, Download } from "lucide-react";
+import { downloadPdf } from "@/lib/download-pdf";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,23 @@ export function BillDetail({
     window.print();
   }
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  async function doDownload() {
+    if (!ref.current) return;
+    setDownloadingPdf(true);
+    try {
+      await downloadPdf(
+        ref.current,
+        `${bill.billNumber}-${bill.billType.toLowerCase()}`,
+      );
+      toast.success("Bill PDF downloaded");
+    } catch {
+      toast.error("Could not generate PDF");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  }
+
   async function recordPayment() {
     const amt = Number(amount);
     if (!(amt > 0)) {
@@ -150,6 +168,24 @@ export function BillDetail({
           <Button variant="outline" size="sm" onClick={doPrint}>
             <Printer className="mr-1.5 h-3.5 w-3.5" />
             Print
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={doDownload}
+            disabled={downloadingPdf}
+          >
+            {downloadingPdf ? (
+              <>
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                Preparing
+              </>
+            ) : (
+              <>
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+                PDF
+              </>
+            )}
           </Button>
           {waMessage && (
             <a

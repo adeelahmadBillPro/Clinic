@@ -27,7 +27,7 @@ export function Sidebar({
   return (
     <aside
       data-sidebar="main"
-      className="hidden w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground lg:sticky lg:top-0 lg:flex lg:h-dvh lg:max-h-dvh"
+      className="hidden w-64 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex lg:h-dvh lg:overflow-hidden"
     >
       <div className="flex h-16 items-center border-b px-5">
         <Link href="/dashboard" aria-label="ClinicOS">
