@@ -7,6 +7,7 @@ import { KpiCard } from "@/components/dashboard/KpiCard";
 import { ClinicMap } from "@/components/dashboard/ClinicMap";
 import { ResetTokensButton } from "@/components/dashboard/ResetTokensButton";
 import { TodayPanel } from "@/components/dashboard/TodayPanel";
+import { TeamPerformanceTable } from "@/components/dashboard/TeamPerformanceTable";
 import { buttonVariants } from "@/components/ui/button";
 import { UserPlus, BanknoteArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -105,6 +106,11 @@ export default async function DashboardPage() {
       <div>
         <h2 className="mb-3 text-sm font-semibold">Today at a glance</h2>
         <TodayPanel clinicId={session.user.clinicId} />
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-sm font-semibold">Team performance today</h2>
+        <TeamPerformanceTable />
       </div>
     </div>
   );

@@ -1,0 +1,303 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Sparkles,
+  Users,
+  Stethoscope,
+  Receipt,
+  TrendingUp,
+  Pill,
+  Clock,
+  UserPlus,
+  BadgeDollarSign,
+  AlertTriangle,
+} from "lucide-react";
+
+type DoctorStats = {
+  role: "DOCTOR";
+  patientsSeen: number;
+  queueWaiting: number;
+  tokensToday: number;
+  revenueCollected: number;
+  revenueSharePct: number;
+  myShare: number;
+};
+
+type ReceptionStats = {
+  role: "RECEPTIONIST";
+  registered: number;
+  tokensIssued: number;
+  revenueCollected: number;
+  assignments: Array<{ doctorId: string; doctorName: string; count: number }>;
+};
+
+type PharmacyStats = {
+  role: "PHARMACIST";
+  dispensed: number;
+  revenueCollected: number;
+  shiftOpen: boolean;
+};
+
+type AdminStats = {
+  role: "ADMIN";
+  newPatients: number;
+  tokensIssued: number;
+  revenueCollected: number;
+  outstandingDues: number;
+};
+
+type Stats = DoctorStats | ReceptionStats | PharmacyStats | AdminStats;
+
+function money(n: number) {
+  return `₨ ${Math.round(n).toLocaleString()}`;
+}
+
+export function MyDayCard() {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let aborted = false;
+    async function load() {
+      try {
+        const res = await fetch("/api/stats/my-day", { cache: "no-store" });
+        const body = await res.json();
+        if (!aborted && body?.success) setStats(body.data as Stats);
+      } finally {
+        if (!aborted) setLoading(false);
+      }
+    }
+    load();
+    const i = setInterval(load, 30000);
+    return () => {
+      aborted = true;
+      clearInterval(i);
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="card-surface h-32 animate-pulse bg-muted/30 p-5" />
+    );
+  }
+  if (!stats) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="card-surface overflow-hidden p-5"
+    >
+      <div className="mb-3 flex items-center gap-2">
+        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/15 text-primary">
+          <Sparkles className="h-3.5 w-3.5" />
+        </div>
+        <div>
+          <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            My day
+          </div>
+          <div className="text-sm font-semibold">
+            {new Date().toLocaleDateString(undefined, {
+              weekday: "long",
+              day: "numeric",
+              month: "short",
+            })}
+          </div>
+        </div>
+      </div>
+
+      {stats.role === "DOCTOR" && (
+        <DoctorBlock s={stats} />
+      )}
+      {stats.role === "RECEPTIONIST" && <ReceptionBlock s={stats} />}
+      {stats.role === "PHARMACIST" && <PharmacyBlock s={stats} />}
+      {stats.role === "ADMIN" && <AdminBlock s={stats} />}
+    </motion.div>
+  );
+}
+
+function Kpi({
+  icon,
+  label,
+  value,
+  tone = "default",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string | number;
+  tone?: "default" | "success" | "warning" | "info";
+}) {
+  const tones: Record<string, string> = {
+    default: "bg-accent text-accent-foreground",
+    success: "bg-emerald-500/15 text-emerald-700",
+    warning: "bg-amber-500/15 text-amber-700",
+    info: "bg-sky-500/15 text-sky-700",
+  };
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg border bg-card p-3">
+      <div
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md ${tones[tone]}`}
+      >
+        <span className="[&>svg]:h-4 [&>svg]:w-4">{icon}</span>
+      </div>
+      <div className="min-w-0">
+        <div className="text-[10px] text-muted-foreground">{label}</div>
+        <div className="truncate text-base font-semibold tabular-nums">
+          {value}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DoctorBlock({ s }: { s: DoctorStats }) {
+  return (
+    <>
+      <div className="grid gap-2 sm:grid-cols-4">
+        <Kpi
+          icon={<Stethoscope />}
+          label="Patients seen"
+          value={s.patientsSeen}
+          tone="info"
+        />
+        <Kpi
+          icon={<Clock />}
+          label="Waiting now"
+          value={s.queueWaiting}
+          tone="warning"
+        />
+        <Kpi
+          icon={<Receipt />}
+          label="Revenue today"
+          value={money(s.revenueCollected)}
+          tone="success"
+        />
+        <Kpi
+          icon={<TrendingUp />}
+          label={`My share (${s.revenueSharePct}%)`}
+          value={money(s.myShare)}
+        />
+      </div>
+      {s.revenueSharePct === 0 && (
+        <div className="mt-2 rounded-md border border-dashed bg-muted/30 p-2 text-[11px] text-muted-foreground">
+          Tip: Set your revenue share % from Staff → your profile to track
+          earnings automatically.
+        </div>
+      )}
+    </>
+  );
+}
+
+function ReceptionBlock({ s }: { s: ReceptionStats }) {
+  return (
+    <>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Kpi
+          icon={<UserPlus />}
+          label="Registered"
+          value={s.registered}
+          tone="info"
+        />
+        <Kpi
+          icon={<Users />}
+          label="Tokens issued"
+          value={s.tokensIssued}
+        />
+        <Kpi
+          icon={<BadgeDollarSign />}
+          label="Collected today"
+          value={money(s.revenueCollected)}
+          tone="success"
+        />
+      </div>
+      {s.assignments.length > 0 && (
+        <div className="mt-3">
+          <div className="mb-1.5 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Assigned to
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {s.assignments.map((a) => (
+              <span
+                key={a.doctorId}
+                className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground"
+              >
+                {a.doctorName}
+                <span className="rounded-full bg-background px-1.5 py-0.5 text-[10px] font-bold">
+                  {a.count}
+                </span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+function PharmacyBlock({ s }: { s: PharmacyStats }) {
+  return (
+    <>
+      <div className="grid gap-2 sm:grid-cols-3">
+        <Kpi
+          icon={<Pill />}
+          label="Dispensed today"
+          value={s.dispensed}
+          tone="info"
+        />
+        <Kpi
+          icon={<BadgeDollarSign />}
+          label="Collected today"
+          value={money(s.revenueCollected)}
+          tone="success"
+        />
+        <Kpi
+          icon={<Clock />}
+          label="Shift"
+          value={s.shiftOpen ? "OPEN" : "closed"}
+          tone={s.shiftOpen ? "success" : "default"}
+        />
+      </div>
+      {!s.shiftOpen && (
+        <div className="mt-2 rounded-md border border-dashed bg-muted/30 p-2 text-[11px] text-muted-foreground">
+          Open a cash shift from{" "}
+          <a href="/billing/shift" className="font-medium text-primary hover:underline">
+            Cash shifts
+          </a>{" "}
+          before collecting payments.
+        </div>
+      )}
+    </>
+  );
+}
+
+function AdminBlock({ s }: { s: AdminStats }) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-4">
+      <Kpi
+        icon={<UserPlus />}
+        label="New patients"
+        value={s.newPatients}
+        tone="info"
+      />
+      <Kpi
+        icon={<Users />}
+        label="Tokens issued"
+        value={s.tokensIssued}
+      />
+      <Kpi
+        icon={<Receipt />}
+        label="Collected"
+        value={money(s.revenueCollected)}
+        tone="success"
+      />
+      <Kpi
+        icon={<AlertTriangle />}
+        label="Outstanding"
+        value={money(s.outstandingDues)}
+        tone="warning"
+      />
+    </div>
+  );
+}

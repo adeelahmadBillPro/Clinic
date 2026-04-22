@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { isAdmin } from "@/lib/permissions";
 import { DoctorDesk } from "@/components/doctor/DoctorDesk";
+import { MyDayCard } from "@/components/shared/MyDayCard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My queue — ClinicOS" };
@@ -27,10 +28,13 @@ export default async function DoctorPage() {
   }
 
   return (
-    <DoctorDesk
-      isAdmin={isAdmin(session.user.role)}
-      currentDoctorId={myDoctorId}
-      userId={session.user.id}
-    />
+    <div className="space-y-5">
+      <MyDayCard />
+      <DoctorDesk
+        isAdmin={isAdmin(session.user.role)}
+        currentDoctorId={myDoctorId}
+        userId={session.user.id}
+      />
+    </div>
   );
 }

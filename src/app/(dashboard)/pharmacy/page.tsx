@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { PharmacyQueue } from "@/components/pharmacy/PharmacyQueue";
+import { MyDayCard } from "@/components/shared/MyDayCard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Pharmacy — ClinicOS" };
@@ -17,6 +18,7 @@ export default async function PharmacyPage() {
           hold.
         </p>
       </div>
+      <MyDayCard />
       <PharmacyQueue />
     </div>
   );

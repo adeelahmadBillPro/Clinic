@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { ReceptionScreen } from "@/components/reception/ReceptionScreen";
+import { MyDayCard } from "@/components/shared/MyDayCard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Reception — ClinicOS" };
@@ -63,5 +64,10 @@ export default async function ReceptionPage() {
     waitingCount: number;
   }>;
 
-  return <ReceptionScreen initialDoctors={initialDoctors} />;
+  return (
+    <div className="space-y-5">
+      <MyDayCard />
+      <ReceptionScreen initialDoctors={initialDoctors} />
+    </div>
+  );
 }
