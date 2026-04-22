@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import { Camera, Loader2, Trash2, User } from "lucide-react";
 import { toast } from "sonner";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -53,12 +52,13 @@ export function PhotoPicker({
         style={{ width: size, height: size }}
       >
         {value ? (
-          <Image
+          // Plain img — next/image optimizer returns 400 for local uploads
+          // in some setups, and avatars don't need on-the-fly optimization.
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={value}
             alt="Profile"
-            fill
-            sizes={`${size}px`}
-            className="object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted-foreground">

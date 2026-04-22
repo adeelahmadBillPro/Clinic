@@ -292,29 +292,8 @@ export function TokenBoard() {
                             Call
                           </Button>
                         )}
-                        {tk.status === "CALLED" && (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            disabled={busyId === tk.id}
-                            onClick={() =>
-                              patch(tk.id, { status: "IN_PROGRESS" })
-                            }
-                          >
-                            Start
-                          </Button>
-                        )}
-                        {tk.status === "IN_PROGRESS" && (
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            disabled={busyId === tk.id}
-                            onClick={() => patch(tk.id, { status: "COMPLETED" })}
-                          >
-                            <CheckCircle2 className="mr-1 h-3 w-3" />
-                            Done
-                          </Button>
-                        )}
+                        {/* Start and Done actions belong to the doctor's
+                            consultation flow, not reception. */}
                         {(tk.status === "WAITING" ||
                           tk.status === "CALLED") && (
                           <Button

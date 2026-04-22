@@ -37,6 +37,26 @@ export async function PATCH(
     );
   }
 
+  // Role-based status transitions:
+  //   - CALLED / CANCELLED: any staff (reception, doctor, admin)
+  //   - IN_PROGRESS / COMPLETED: only the doctor handling the token, or
+  //     OWNER/ADMIN. Receptionists cannot complete consultations.
+  const role = session.user.role;
+  if (status === "IN_PROGRESS" || status === "COMPLETED") {
+    const isAdmin = role === "OWNER" || role === "ADMIN";
+    const isDoctor = role === "DOCTOR";
+    if (!isAdmin && !isDoctor) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "Only the doctor (or admin) can start or complete a consultation. Reception can call or cancel.",
+        },
+        { status: 403 },
+      );
+    }
+  }
+
   const now = new Date();
   const update: Record<string, unknown> = {};
   if (status) {

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2,
@@ -78,12 +77,11 @@ function DoctorAvatar({
         className="relative h-full w-full overflow-hidden rounded-full border bg-muted ring-2 ring-background"
       >
         {doctor.photoUrl ? (
-          <Image
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={doctor.photoUrl}
             alt={doctor.name}
-            fill
-            sizes={`${size}px`}
-            className="object-cover"
+            className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-sm font-semibold text-muted-foreground">

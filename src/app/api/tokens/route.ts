@@ -170,6 +170,38 @@ export async function POST(req: Request) {
     );
   }
 
+  // Prevent duplicate active tokens for the same patient (any doctor) today
+  const todayStart = startOfToday();
+  const existingActive = await t.token.findFirst({
+    where: {
+      patientId: input.patientId,
+      status: { in: ["WAITING", "CALLED", "IN_PROGRESS"] },
+      issuedAt: { gte: todayStart },
+    },
+    select: {
+      id: true,
+      displayToken: true,
+      status: true,
+      doctorId: true,
+    },
+  });
+  if (existingActive) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `This patient already has an active token today: ${existingActive.displayToken} (${existingActive.status.replace("_", " ").toLowerCase()}). Cancel or complete it before issuing a new one.`,
+        field: "patientId",
+        existingToken: {
+          id: existingActive.id,
+          displayToken: existingActive.displayToken,
+          status: existingActive.status,
+          doctorId: existingActive.doctorId,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
   const { tokenNumber, displayToken } = await nextTokenNumber(
     clinicId,
     input.doctorId,
