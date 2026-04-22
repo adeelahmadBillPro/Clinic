@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/select";
 import { PasswordInput } from "@/components/shared/PasswordInput";
 import { PhoneInput } from "@/components/shared/PhoneInput";
+import { StaffCreatedDialog } from "./StaffCreatedDialog";
 import {
   addStaffSchema,
   type AddStaffInput,
@@ -49,6 +50,13 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [createdCreds, setCreatedCreds] = useState<{
+    name: string;
+    email: string;
+    password: string;
+    phone: string | null;
+    role: string;
+  } | null>(null);
 
   useEffect(() => {
     if (autoOpen) setOpen(true);
@@ -97,23 +105,12 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
         }
         return;
       }
-      // Copy-friendly credentials card in a longer toast with Copy action
-      toast.success(`${values.name} added to your team`, {
-        description: `Email: ${values.email}\nPassword: ${values.password}`,
-        duration: 14000,
-        action: {
-          label: "Copy creds",
-          onClick: async () => {
-            try {
-              await navigator.clipboard.writeText(
-                `Login URL: ${location.origin}/login\nEmail: ${values.email}\nPassword: ${values.password}`,
-              );
-              toast.success("Credentials copied");
-            } catch {
-              toast.error("Couldn't copy");
-            }
-          },
-        },
+      setCreatedCreds({
+        name: values.name,
+        email: values.email,
+        password: values.password,
+        phone: values.phone || null,
+        role: values.role,
       });
       reset();
       setOpen(false);
@@ -126,6 +123,12 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
   }
 
   return (
+    <>
+    <StaffCreatedDialog
+      creds={createdCreds}
+      open={!!createdCreds}
+      onClose={() => setCreatedCreds(null)}
+    />
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button size="sm">
@@ -382,6 +385,7 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
         </form>
       </DialogContent>
     </Dialog>
+    </>
   );
 }
 

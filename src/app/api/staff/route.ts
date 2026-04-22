@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
@@ -168,6 +169,12 @@ export async function POST(req: Request) {
 
     return { userId: user.id, doctorId };
   });
+
+  // Invalidate server cache for the staff list so router.refresh() picks
+  // up the new row without a manual reload.
+  revalidatePath("/staff");
+  revalidatePath("/doctor");
+  revalidatePath("/reception");
 
   return NextResponse.json({ success: true, data: result });
 }

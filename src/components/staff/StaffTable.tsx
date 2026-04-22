@@ -5,7 +5,25 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import type { Role } from "@prisma/client";
 import { toast } from "sonner";
-import { MoreHorizontal, Power, PowerOff, Loader2 } from "lucide-react";
+import {
+  MoreHorizontal,
+  Power,
+  PowerOff,
+  Loader2,
+  AlertTriangle,
+  Pencil,
+  Trash2,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { EditStaffDialog } from "./EditStaffDialog";
 
 import {
   Table,
@@ -98,6 +116,36 @@ export function StaffTable({
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [pendingDeactivate, setPendingDeactivate] = useState<StaffRow | null>(
+    null,
+  );
+  const [editing, setEditing] = useState<StaffRow | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<StaffRow | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+
+  async function hardDelete(s: StaffRow) {
+    setBusyId(s.id);
+    try {
+      const res = await fetch(`/api/staff/${s.id}`, { method: "DELETE" });
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        toast.error(body?.error ?? "Could not delete");
+        return;
+      }
+      if (body.data?.deactivated) {
+        toast.success(
+          `${s.name} has historical records — deactivated instead of deleted`,
+        );
+      } else {
+        toast.success(`${s.name} removed`);
+      }
+      setPendingDelete(null);
+      setDeleteConfirm("");
+      router.refresh();
+    } finally {
+      setBusyId(null);
+    }
+  }
 
   async function patch(id: string, payload: Record<string, unknown>) {
     setBusyId(id);
@@ -240,7 +288,12 @@ export function StaffTable({
                         )}
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuContent align="end" className="w-48">
+                      <DropdownMenuItem onSelect={() => setEditing(s)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit profile
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
                       {s.role === "DOCTOR" && (
                         <>
                           <DropdownMenuItem
@@ -266,14 +319,15 @@ export function StaffTable({
                         </>
                       )}
                       {s.isActive ? (
-                        <DropdownMenuItem
-                          onSelect={() => patch(s.id, { isActive: false })}
-                          disabled={isSelf}
-                          className="text-destructive focus:text-destructive"
-                        >
-                          <PowerOff className="mr-2 h-4 w-4" />
-                          Deactivate
-                        </DropdownMenuItem>
+                        !isSelf && (
+                          <DropdownMenuItem
+                            onSelect={() => setPendingDeactivate(s)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <PowerOff className="mr-2 h-4 w-4" />
+                            Deactivate
+                          </DropdownMenuItem>
+                        )
                       ) : (
                         <DropdownMenuItem
                           onSelect={() => patch(s.id, { isActive: true })}
@@ -281,6 +335,21 @@ export function StaffTable({
                           <Power className="mr-2 h-4 w-4" />
                           Reactivate
                         </DropdownMenuItem>
+                      )}
+                      {!isSelf && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            onSelect={() => {
+                              setPendingDelete(s);
+                              setDeleteConfirm("");
+                            }}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete permanently
+                          </DropdownMenuItem>
+                        </>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -290,6 +359,154 @@ export function StaffTable({
           })}
         </TableBody>
       </Table>
+
+      <EditStaffDialog
+        staff={editing}
+        open={!!editing}
+        onClose={() => setEditing(null)}
+      />
+
+      {/* Delete confirmation */}
+      <Dialog
+        open={!!pendingDelete}
+        onOpenChange={(v) =>
+          !v && busyId !== pendingDelete?.id && setPendingDelete(null)
+        }
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              <span className="inline-flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Delete {pendingDelete?.name}?
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          {pendingDelete && (
+            <>
+              <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                <div className="font-medium">
+                  {pendingDelete.name}{" "}
+                  <span className="text-xs text-muted-foreground">
+                    · {pendingDelete.email}
+                  </span>
+                </div>
+                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  <li>
+                    • If they have bills collected / consultations / tokens
+                    issued, the record is <b>deactivated</b> instead (audit
+                    trail preserved).
+                  </li>
+                  <li>
+                    • Otherwise the account and doctor profile are removed
+                    permanently.
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <label className="text-xs font-medium">
+                  Type{" "}
+                  <span className="font-mono font-semibold">
+                    {pendingDelete.name.toLowerCase()}
+                  </span>{" "}
+                  to confirm
+                </label>
+                <Input
+                  autoFocus
+                  value={deleteConfirm}
+                  onChange={(e) => setDeleteConfirm(e.target.value)}
+                  className="mt-1"
+                />
+              </div>
+              <DialogFooter className="sm:justify-stretch">
+                <DialogClose asChild>
+                  <Button variant="ghost" disabled={busyId === pendingDelete.id}>
+                    Cancel
+                  </Button>
+                </DialogClose>
+                <Button
+                  variant="destructive"
+                  onClick={() => hardDelete(pendingDelete)}
+                  disabled={
+                    busyId === pendingDelete.id ||
+                    deleteConfirm.trim().toLowerCase() !==
+                      pendingDelete.name.toLowerCase()
+                  }
+                  className="flex-1"
+                >
+                  {busyId === pendingDelete.id ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      Deleting
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                      Delete permanently
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={!!pendingDeactivate}
+        onOpenChange={(v) =>
+          !v && busyId !== pendingDeactivate?.id && setPendingDeactivate(null)
+        }
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              <span className="inline-flex items-center gap-2 text-destructive">
+                <AlertTriangle className="h-5 w-5" />
+                Deactivate {pendingDeactivate?.name}?
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+          {pendingDeactivate && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm">
+              <div className="font-medium">
+                {pendingDeactivate.name}{" "}
+                <span className="text-xs text-muted-foreground">
+                  · {pendingDeactivate.email}
+                </span>
+              </div>
+              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                <li>• They won&rsquo;t be able to log in.</li>
+                {pendingDeactivate.role === "DOCTOR" && (
+                  <li>• Their doctor profile stays in patient history, but
+                    new bookings will skip them.</li>
+                )}
+                <li>• All their past records stay intact (audit, bills,
+                  consultations).</li>
+                <li>• You can reactivate them later any time.</li>
+              </ul>
+            </div>
+          )}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="ghost">Cancel</Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (pendingDeactivate) {
+                  patch(pendingDeactivate.id, { isActive: false });
+                  setPendingDeactivate(null);
+                }
+              }}
+              disabled={busyId === pendingDeactivate?.id}
+            >
+              <PowerOff className="mr-1.5 h-3.5 w-3.5" />
+              Deactivate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   );
 }
