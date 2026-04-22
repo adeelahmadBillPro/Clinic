@@ -39,7 +39,15 @@ export default async function PublicBookingPage({
   if (!clinic || !clinic.isActive) notFound();
 
   const t = db(clinic.id);
-  const doctors = await t.doctor.findMany({ where: { isAvailable: true } });
+  const allDoctors = await t.doctor.findMany({ where: { isAvailable: true } });
+  // Only doctors with a real weekly schedule can accept online bookings.
+  const doctors = allDoctors.filter((d) => {
+    const s = (d.schedule ?? {}) as Record<string, unknown>;
+    return ["mon", "tue", "wed", "thu", "fri", "sat", "sun"].some((k) => {
+      const v = s[k];
+      return v && typeof v === "object" && v !== null && "start" in v;
+    });
+  });
   const [users, ratingMap] = await Promise.all([
     prisma.user.findMany({
       where: {
@@ -112,11 +120,34 @@ export default async function PublicBookingPage({
           )}
         </div>
 
-        <PublicBookingForm slug={slug} doctors={doctorList} />
-
-        <p className="mt-8 text-center text-xs text-muted-foreground">
-          By booking you agree to be contacted at the phone number provided.
-        </p>
+        {doctorList.length === 0 ? (
+          <div className="card-surface mx-auto max-w-lg p-10 text-center">
+            <div className="text-lg font-semibold">
+              Online booking not available yet
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              {allDoctors.length === 0
+                ? "This clinic hasn't set up doctors yet."
+                : "Doctors haven't published their schedules yet. Please call the clinic to book."}
+            </p>
+            {clinic.phone && (
+              <a
+                href={`tel:${clinic.phone.replace(/[^\d+]/g, "")}`}
+                className="mt-4 inline-flex h-10 items-center gap-1.5 rounded-full bg-primary px-5 text-sm font-semibold text-primary-foreground hover:shadow-sm"
+              >
+                Call {clinic.phone}
+              </a>
+            )}
+          </div>
+        ) : (
+          <>
+            <PublicBookingForm slug={slug} doctors={doctorList} />
+            <p className="mt-8 text-center text-xs text-muted-foreground">
+              By booking you agree to be contacted at the phone number
+              provided.
+            </p>
+          </>
+        )}
       </main>
     </div>
   );

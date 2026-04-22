@@ -25,7 +25,7 @@ const schema = z.object({
     .enum(["FIRST_VISIT", "FOLLOW_UP", "CHECKUP"])
     .default("FIRST_VISIT"),
   notes: z.string().max(500, "Too long (max 500)").optional(),
-  bookedVia: z.enum(["RECEPTION", "ONLINE"]).default("RECEPTION"),
+  bookedVia: z.enum(["RECEPTION", "ONLINE", "PHONE"]).default("RECEPTION"),
 });
 
 export async function GET(req: Request) {
@@ -78,6 +78,29 @@ export async function POST(req: Request) {
     );
   }
   const t = db(session.user.clinicId);
+  const apptDay = new Date(parsed.data.appointmentDate);
+  const dayStart = new Date(apptDay);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(apptDay);
+  dayEnd.setHours(23, 59, 59, 999);
+  const clash = await t.appointment.findFirst({
+    where: {
+      doctorId: parsed.data.doctorId,
+      appointmentDate: { gte: dayStart, lte: dayEnd },
+      timeSlot: parsed.data.timeSlot,
+      status: { in: ["SCHEDULED", "CONFIRMED", "CHECKED_IN"] },
+    },
+  });
+  if (clash) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "This slot is already booked. Pick another.",
+      },
+      { status: 409 },
+    );
+  }
+
   const appt = await t.appointment.create({
     data: {
       clinicId: session.user.clinicId,
@@ -85,7 +108,7 @@ export async function POST(req: Request) {
       patientName: parsed.data.patientName,
       patientPhone: parsed.data.patientPhone,
       doctorId: parsed.data.doctorId,
-      appointmentDate: new Date(parsed.data.appointmentDate),
+      appointmentDate: apptDay,
       timeSlot: parsed.data.timeSlot,
       type: parsed.data.type,
       status: "SCHEDULED",
@@ -95,6 +118,9 @@ export async function POST(req: Request) {
   });
   return NextResponse.json({
     success: true,
-    data: { id: appt.id },
+    data: {
+      id: appt.id,
+      confirmation: `APT-${appt.id.slice(-6).toUpperCase()}`,
+    },
   });
 }

@@ -25,6 +25,7 @@ function isPublic(pathname: string): boolean {
   if (pathname.startsWith("/api/reset-password")) return true;
   if (pathname.startsWith("/api/reviews")) return true;
   if (pathname.startsWith("/api/doctors/") && pathname.endsWith("/reviews")) return true;
+  if (pathname.startsWith("/api/doctors/") && pathname.endsWith("/slots")) return true;
   return false;
 }
 

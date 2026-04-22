@@ -97,7 +97,24 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
         }
         return;
       }
-      toast.success(`${values.name} added to your team`);
+      // Copy-friendly credentials card in a longer toast with Copy action
+      toast.success(`${values.name} added to your team`, {
+        description: `Email: ${values.email}\nPassword: ${values.password}`,
+        duration: 14000,
+        action: {
+          label: "Copy creds",
+          onClick: async () => {
+            try {
+              await navigator.clipboard.writeText(
+                `Login URL: ${location.origin}/login\nEmail: ${values.email}\nPassword: ${values.password}`,
+              );
+              toast.success("Credentials copied");
+            } catch {
+              toast.error("Couldn't copy");
+            }
+          },
+        },
+      });
       reset();
       setOpen(false);
       router.refresh();
@@ -205,17 +222,52 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
           </div>
 
           <div>
-            <Label htmlFor="password">Temporary password</Label>
-            <PasswordInput
-              id="password"
-              aria-invalid={!!errors.password}
-              className={cn("mt-1.5", errors.password && "border-destructive")}
-              placeholder="Share this with them"
-              {...register("password")}
-            />
-            {errors.password && (
+            <div className="flex items-center justify-between">
+              <Label htmlFor="password">Temporary password</Label>
+              <button
+                type="button"
+                onClick={() => {
+                  const pwd = generatePassword();
+                  setValue("password", pwd, { shouldValidate: true });
+                }}
+                className="text-[11px] font-medium text-primary hover:underline"
+              >
+                Generate strong password
+              </button>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <PasswordInput
+                id="password"
+                aria-invalid={!!errors.password}
+                className={cn("flex-1", errors.password && "border-destructive")}
+                placeholder="Auto-generated or type one"
+                {...register("password")}
+              />
+              <button
+                type="button"
+                onClick={async () => {
+                  const v = watch("password");
+                  if (!v) return;
+                  try {
+                    await navigator.clipboard.writeText(v);
+                    toast.success("Password copied");
+                  } catch {
+                    toast.error("Couldn't copy");
+                  }
+                }}
+                className="inline-flex h-9 items-center rounded-md border bg-card px-3 text-xs font-medium hover:bg-accent/60"
+              >
+                Copy
+              </button>
+            </div>
+            {errors.password ? (
               <p className="mt-1 text-xs text-destructive">
                 {errors.password.message}
+              </p>
+            ) : (
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                Share these credentials with the staff member. They can change
+                it after first login.
               </p>
             )}
           </div>
@@ -331,4 +383,31 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
       </DialogContent>
     </Dialog>
   );
+}
+
+function generatePassword(): string {
+  // 10 char: 2 upper, 2 lower, 2 digits, 4 mixed. Readable — no 0/O/l/1.
+  const UP = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const LO = "abcdefghjkmnpqrstuvwxyz";
+  const DI = "23456789";
+  const MIX = UP + LO + DI;
+  const rand = (s: string) => s[Math.floor(Math.random() * s.length)];
+  const arr = [
+    rand(UP),
+    rand(UP),
+    rand(LO),
+    rand(LO),
+    rand(DI),
+    rand(DI),
+    rand(MIX),
+    rand(MIX),
+    rand(MIX),
+    rand(MIX),
+  ];
+  // Fisher-Yates shuffle
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.join("");
 }

@@ -23,6 +23,8 @@ type Props = {
   disablePast?: boolean;
   /** Disable future dates (today is still allowed). */
   disableFuture?: boolean;
+  /** Maximum number of days forward allowed (e.g. 14). */
+  maxAhead?: number;
   className?: string;
   id?: string;
   clearable?: boolean;
@@ -61,6 +63,7 @@ export function DatePicker({
   toDate,
   disablePast,
   disableFuture,
+  maxAhead,
   className,
   id,
   clearable = true,
@@ -71,7 +74,13 @@ export function DatePicker({
   today.setHours(0, 0, 0, 0);
 
   const effectiveFromDate = disablePast ? today : fromDate;
-  const effectiveToDate = disableFuture ? today : toDate;
+  let effectiveToDate = disableFuture ? today : toDate;
+  if (maxAhead !== undefined) {
+    const cap = new Date(today);
+    cap.setDate(today.getDate() + maxAhead);
+    effectiveToDate =
+      effectiveToDate && effectiveToDate < cap ? effectiveToDate : cap;
+  }
 
   // Close popover after picking
   function onSelect(d: Date | undefined) {

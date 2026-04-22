@@ -47,10 +47,12 @@ type Review = {
   createdAt: string;
 };
 
-const TIME_SLOTS = [
-  "09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00",
-  "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00",
-];
+type SlotInfo = {
+  time: string;
+  booked: boolean;
+  past: boolean;
+  available: boolean;
+};
 
 function initials(name: string) {
   return name
@@ -112,13 +114,51 @@ export function PublicBookingForm({
     patientName: "",
     patientPhone: "",
     appointmentDate: "",
-    timeSlot: "10:00",
+    timeSlot: "",
     notes: "",
   });
   const [submitting, setSubmitting] = useState(false);
   const [confirmation, setConfirmation] = useState<string | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
+  const [slots, setSlots] = useState<SlotInfo[]>([]);
+  const [slotsOpen, setSlotsOpen] = useState<boolean>(true);
+  const [slotsReason, setSlotsReason] = useState<string | null>(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
+  // Fetch available slots whenever doctor or date changes
+  useEffect(() => {
+    if (!selectedId || !form.appointmentDate) {
+      setSlots([]);
+      setSlotsOpen(true);
+      setSlotsReason(null);
+      return;
+    }
+    let abort = false;
+    setLoadingSlots(true);
+    fetch(`/api/doctors/${selectedId}/slots?date=${form.appointmentDate}`)
+      .then((r) => r.json())
+      .then((body) => {
+        if (abort) return;
+        if (body?.success) {
+          setSlots(body.data.slots ?? []);
+          setSlotsOpen(body.data.open);
+          setSlotsReason(body.data.reason ?? null);
+          // Reset the chosen slot if it's no longer available
+          const stillValid = (body.data.slots as SlotInfo[] | undefined)?.some(
+            (s) => s.time === form.timeSlot && s.available,
+          );
+          if (!stillValid) setForm((f) => ({ ...f, timeSlot: "" }));
+        }
+      })
+      .finally(() => {
+        if (!abort) setLoadingSlots(false);
+      });
+    return () => {
+      abort = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, form.appointmentDate]);
 
   useEffect(() => {
     if (!selectedId) return;
@@ -472,32 +512,81 @@ export function PublicBookingForm({
                   value={form.appointmentDate}
                   onChange={(v) => setForm({ ...form, appointmentDate: v })}
                   disablePast
-                  placeholder="Pick a date"
+                  maxAhead={14}
+                  placeholder="Pick a date (within 14 days)"
                 />
               </div>
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <Label className="flex items-center gap-1.5">
                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                Preferred time
+                Available time
               </Label>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {TIME_SLOTS.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => setForm({ ...form, timeSlot: s })}
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
-                      form.timeSlot === s
-                        ? "border-primary bg-primary text-primary-foreground shadow-sm"
-                        : "bg-card hover:bg-accent/60",
-                    )}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
+              {!form.appointmentDate ? (
+                <div className="mt-1 rounded-md border border-dashed bg-muted/30 p-3 text-center text-xs text-muted-foreground">
+                  Pick a date first
+                </div>
+              ) : loadingSlots ? (
+                <div className="mt-1 flex items-center gap-2 rounded-md border bg-card p-3 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Loading slots...
+                </div>
+              ) : !slotsOpen ? (
+                <div className="mt-1 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-center text-xs text-amber-700">
+                  {slotsReason ?? "No slots on this day."}
+                </div>
+              ) : slots.length === 0 ? (
+                <div className="mt-1 rounded-md border border-dashed bg-muted/30 p-3 text-center text-xs text-muted-foreground">
+                  Doctor has no slots configured for this day.
+                </div>
+              ) : (
+                <>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {slots.map((s) => {
+                      const isSelected = form.timeSlot === s.time;
+                      const disabled = !s.available;
+                      return (
+                        <button
+                          key={s.time}
+                          type="button"
+                          disabled={disabled}
+                          onClick={() => setForm({ ...form, timeSlot: s.time })}
+                          title={
+                            s.past
+                              ? "Time has passed"
+                              : s.booked
+                                ? "Already booked"
+                                : undefined
+                          }
+                          className={cn(
+                            "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                            isSelected &&
+                              "border-primary bg-primary text-primary-foreground shadow-sm",
+                            !isSelected && s.available && "bg-card hover:bg-accent/60",
+                            s.booked &&
+                              !isSelected &&
+                              "border-dashed bg-muted text-muted-foreground line-through",
+                            s.past &&
+                              !isSelected &&
+                              "bg-muted/40 text-muted-foreground/50",
+                          )}
+                        >
+                          {s.time}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div className="mt-1 flex items-center gap-3 text-[10px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full bg-primary" />
+                      Selected
+                    </span>
+                    <span className="inline-flex items-center gap-1 line-through">
+                      Booked
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 

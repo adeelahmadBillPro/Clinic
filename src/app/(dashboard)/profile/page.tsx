@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
 import { ProfileForm } from "@/components/profile/ProfileForm";
+import { ScheduleEditor, type WeeklySchedule } from "@/components/profile/ScheduleEditor";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My profile — ClinicOS" };
@@ -28,6 +29,7 @@ export default async function ProfilePage() {
 
   // Doctor profile also applies to OWNER/ADMIN who practice
   let doctor = null;
+  let schedule: WeeklySchedule | null = null;
   if (["DOCTOR", "OWNER", "ADMIN"].includes(user.role)) {
     const d = await db(session.user.clinicId).doctor.findFirst({
       where: { userId: user.id },
@@ -45,6 +47,25 @@ export default async function ProfilePage() {
         gender: d.gender,
         whatsappNumber: d.whatsappNumber,
         photoUrl: d.photoUrl,
+      };
+      const raw = (d.schedule ?? {}) as Record<
+        string,
+        { start: string; end: string } | null | number
+      >;
+      const read = (k: string) => {
+        const v = raw[k];
+        return v && typeof v === "object" && "start" in v
+          ? { start: v.start, end: v.end }
+          : null;
+      };
+      schedule = {
+        mon: read("mon"),
+        tue: read("tue"),
+        wed: read("wed"),
+        thu: read("thu"),
+        fri: read("fri"),
+        sat: read("sat"),
+        sun: read("sun"),
       };
     }
   }
@@ -73,6 +94,8 @@ export default async function ProfilePage() {
         }}
         doctor={doctor}
       />
+
+      {doctor && schedule && <ScheduleEditor initial={schedule} />}
     </div>
   );
 }

@@ -107,6 +107,50 @@ export async function POST(
     );
   }
 
+  // Slot sanity + race-free booking
+  const apptDay = new Date(parsed.data.appointmentDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const maxDate = new Date(today);
+  maxDate.setDate(today.getDate() + 14);
+  if (apptDay < today) {
+    return NextResponse.json(
+      { success: false, error: "Cannot book in the past" },
+      { status: 400 },
+    );
+  }
+  if (apptDay > maxDate) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Bookings are limited to 14 days in advance",
+      },
+      { status: 400 },
+    );
+  }
+
+  const dayStart = new Date(apptDay);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(apptDay);
+  dayEnd.setHours(23, 59, 59, 999);
+  const clash = await t.appointment.findFirst({
+    where: {
+      doctorId: parsed.data.doctorId,
+      appointmentDate: { gte: dayStart, lte: dayEnd },
+      timeSlot: parsed.data.timeSlot,
+      status: { in: ["SCHEDULED", "CONFIRMED", "CHECKED_IN"] },
+    },
+  });
+  if (clash) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "This time slot was just booked by someone else. Please pick another.",
+      },
+      { status: 409 },
+    );
+  }
+
   const appt = await t.appointment.create({
     data: {
       clinicId: clinic.id,
