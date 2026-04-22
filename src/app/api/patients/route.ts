@@ -85,8 +85,8 @@ export async function POST(req: Request) {
   const data = parsed.data;
   const t = db(session.user.clinicId);
 
-  // Duplicate-phone protection — unless explicitly forced
-  if (!data.forceCreate) {
+  // Duplicate-phone protection — only when a phone is provided + not forced
+  if (!data.forceCreate && data.phone) {
     const existing = await t.patient.findFirst({
       where: { phone: data.phone, isActive: true },
       select: {
@@ -117,7 +117,7 @@ export async function POST(req: Request) {
       clinicId: session.user.clinicId,
       mrn,
       name: data.name,
-      phone: data.phone,
+      phone: data.phone || "",
       gender: data.gender,
       dob: data.dob ? new Date(data.dob) : null,
       address: data.address || null,

@@ -265,7 +265,10 @@ export function RegisterPatientForm({
         </div>
         <div>
           <Label htmlFor="p-phone">
-            Phone <span className="text-destructive">*</span>
+            Phone{" "}
+            <span className="text-muted-foreground text-xs font-normal">
+              (optional)
+            </span>
           </Label>
           <div className={cn("mt-1.5", errors.phone && "[&_input]:border-destructive")}>
             <Controller
@@ -321,7 +324,12 @@ export function RegisterPatientForm({
         </div>
         <div>
           <div className="flex items-baseline justify-between">
-            <Label htmlFor="p-dob">Date of birth</Label>
+            <Label htmlFor="p-dob">
+              Date of birth{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                (or enter age)
+              </span>
+            </Label>
             {ageLabel && (
               <span className="text-xs font-medium text-primary">
                 {ageLabel}
@@ -331,18 +339,53 @@ export function RegisterPatientForm({
           <Controller
             control={control}
             name="dob"
-            render={({ field }) => (
-              <DatePicker
-                id="p-dob"
-                value={field.value ?? ""}
-                onChange={field.onChange}
-                placeholder="Pick date of birth"
-                disableFuture
-                fromYear={1900}
-                toYear={new Date().getFullYear()}
-                className="mt-1.5"
-              />
-            )}
+            render={({ field }) => {
+              const dobVal = field.value ?? "";
+              const approxAge = dobVal
+                ? (() => {
+                    const d = new Date(dobVal);
+                    if (isNaN(d.getTime())) return "";
+                    const age =
+                      new Date().getFullYear() - d.getFullYear();
+                    return age >= 0 && age <= 130 ? String(age) : "";
+                  })()
+                : "";
+              return (
+                <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_90px] gap-2">
+                  <DatePicker
+                    id="p-dob"
+                    value={dobVal}
+                    onChange={field.onChange}
+                    placeholder="Pick DOB (optional)"
+                    disableFuture
+                    fromYear={1900}
+                    toYear={new Date().getFullYear()}
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={130}
+                    placeholder="Age"
+                    value={approxAge}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "") {
+                        field.onChange("");
+                        return;
+                      }
+                      const age = parseInt(v, 10);
+                      if (isNaN(age) || age < 0 || age > 130) return;
+                      const d = new Date();
+                      d.setFullYear(d.getFullYear() - age, 0, 1);
+                      d.setHours(0, 0, 0, 0);
+                      const iso = `${d.getFullYear()}-01-01`;
+                      field.onChange(iso);
+                    }}
+                    className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                  />
+                </div>
+              );
+            }}
           />
           {errors.dob && (
             <p className="mt-1 text-xs text-destructive">

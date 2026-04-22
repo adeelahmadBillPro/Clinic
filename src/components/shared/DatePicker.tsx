@@ -45,7 +45,6 @@ function fromISO(v?: string): Date | undefined {
 
 function prettyDate(d: Date): string {
   return d.toLocaleDateString(undefined, {
-    weekday: "short",
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -100,9 +99,11 @@ export function DatePicker({
           className,
         )}
       >
-        <span className="flex items-center gap-2">
-          <CalendarDays className="h-3.5 w-3.5 text-muted-foreground" />
-          {selected ? prettyDate(selected) : placeholder}
+        <span className="flex min-w-0 flex-1 items-center gap-2 truncate whitespace-nowrap">
+          <CalendarDays className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate">
+            {selected ? prettyDate(selected) : placeholder}
+          </span>
         </span>
         {clearable && selected && (
           <span

@@ -148,6 +148,27 @@ export async function PATCH(
       data.specialization !== undefined ||
       data.qualification !== undefined)
   ) {
+    // Room uniqueness — another active doctor must not already use this room
+    if (data.roomNumber && data.roomNumber.trim()) {
+      const t = db(session.user.clinicId);
+      const mine = await t.doctor.findFirst({ where: { userId: user.id } });
+      const clash = await t.doctor.findFirst({
+        where: {
+          roomNumber: data.roomNumber.trim(),
+          ...(mine ? { id: { not: mine.id } } : {}),
+        },
+      });
+      if (clash) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Room ${data.roomNumber} is already assigned to another doctor.`,
+            field: "roomNumber",
+          },
+          { status: 409 },
+        );
+      }
+    }
     const docUpdate: Record<string, unknown> = {};
     if (data.isAvailable !== undefined) docUpdate.isAvailable = data.isAvailable;
     if (data.status !== undefined) docUpdate.status = data.status;

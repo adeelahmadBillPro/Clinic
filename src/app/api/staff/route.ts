@@ -126,6 +126,23 @@ export async function POST(req: Request) {
   const clinicId = session.user.clinicId;
   const hashed = await hashPassword(data.password);
 
+  // If assigning a room to a doctor, ensure it's not already in use
+  if (data.role === "DOCTOR" && data.roomNumber && data.roomNumber.trim()) {
+    const roomClash = await db(clinicId).doctor.findFirst({
+      where: { roomNumber: data.roomNumber.trim() },
+    });
+    if (roomClash) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Room ${data.roomNumber} is already assigned to another doctor.`,
+          field: "roomNumber",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {

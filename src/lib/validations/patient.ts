@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { phoneSchema, nameSchema, optionalPhoneSchema } from "./common";
+import { nameSchema, optionalPhoneSchema } from "./common";
 
 export const createPatientSchema = z.object({
   name: nameSchema,
-  phone: phoneSchema,
+  phone: optionalPhoneSchema,
   gender: z.enum(["M", "F", "Other"], {
     message: "Pick a gender",
   }),
