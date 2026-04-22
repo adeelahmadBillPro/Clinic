@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Trash2, Loader2, Package, Truck, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { Plus, Trash2, Loader2, Package, Truck, CheckCircle2, Printer, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -67,6 +68,31 @@ export function PurchaseOrdersClient({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [receiving, setReceiving] = useState<PO | null>(null);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  async function cancelPO(p: PO) {
+    const reason = prompt(
+      `Cancel PO ${p.poNumber}? Reason (optional):`,
+    );
+    if (reason === null) return; // dismissed
+    setCancellingId(p.id);
+    try {
+      const res = await fetch(`/api/inventory/purchase-orders/${p.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "cancel", reason }),
+      });
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        toast.error(body?.error ?? "Could not cancel");
+        return;
+      }
+      toast.success(`${p.poNumber} cancelled`);
+      router.refresh();
+    } finally {
+      setCancellingId(null);
+    }
+  }
   const [supplierId, setSupplierId] = useState<string>(suppliers[0]?.id ?? "");
   const [items, setItems] = useState<LineForm[]>([
     { id: 1, name: "", qty: 1, unitPrice: 0 },
@@ -321,22 +347,53 @@ export function PurchaseOrdersClient({
                     {Math.round(p.totalAmount).toLocaleString()}
                   </div>
                 </div>
-                {p.status === "ORDERED" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setReceiving(p)}
+                <div className="flex items-center gap-2">
+                  <Link
+                    href={`/inventory/purchase-orders/${p.id}`}
+                    target="_blank"
+                    className="inline-flex h-8 items-center gap-1 rounded-md border bg-card px-2.5 text-xs font-medium hover:bg-accent/60"
+                    title="Open / print"
                   >
-                    <Package className="mr-1.5 h-3.5 w-3.5" />
-                    Receive
-                  </Button>
-                )}
-                {p.status === "RECEIVED" && (
-                  <Badge variant="secondary" className="gap-1">
-                    <CheckCircle2 className="h-3 w-3 text-emerald-600" />
-                    Received
-                  </Badge>
-                )}
+                    <Printer className="h-3.5 w-3.5" />
+                    Print
+                  </Link>
+                  {p.status === "ORDERED" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setReceiving(p)}
+                    >
+                      <Package className="mr-1.5 h-3.5 w-3.5" />
+                      Receive
+                    </Button>
+                  )}
+                  {(p.status === "DRAFT" || p.status === "ORDERED") && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => cancelPO(p)}
+                      disabled={cancellingId === p.id}
+                      className="text-destructive hover:bg-destructive/10"
+                    >
+                      {cancellingId === p.id ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <X className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  )}
+                  {p.status === "RECEIVED" && (
+                    <Badge variant="secondary" className="gap-1">
+                      <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                      Received
+                    </Badge>
+                  )}
+                  {p.status === "CANCELLED" && (
+                    <Badge variant="secondary" className="text-destructive">
+                      Cancelled
+                    </Badge>
+                  )}
+                </div>
               </div>
               <div className="mt-2 text-[10px] text-muted-foreground">
                 Created {new Date(p.createdAt).toLocaleString()}

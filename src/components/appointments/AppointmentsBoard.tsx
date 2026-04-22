@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, Check, X, CalendarDays } from "lucide-react";
+import { Plus, Loader2, Check, X, CalendarDays, Clock } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -65,26 +65,12 @@ const STATUS_COLOR: Record<Appt["status"], string> = {
   NO_SHOW: "bg-destructive/10 text-destructive border-destructive/25",
 };
 
-const TIME_SLOTS = [
-  "09:00",
-  "09:30",
-  "10:00",
-  "10:30",
-  "11:00",
-  "11:30",
-  "12:00",
-  "14:00",
-  "14:30",
-  "15:00",
-  "15:30",
-  "16:00",
-  "16:30",
-  "17:00",
-  "17:30",
-  "18:00",
-  "18:30",
-  "19:00",
-];
+type SlotInfo = {
+  time: string;
+  booked: boolean;
+  past: boolean;
+  available: boolean;
+};
 
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString(undefined, {
@@ -115,10 +101,46 @@ export function AppointmentsBoard({
     patientPhone: "",
     doctorId: doctors[0]?.id ?? "",
     appointmentDate: "",
-    timeSlot: "10:00",
+    timeSlot: "",
     type: "FIRST_VISIT" as "FIRST_VISIT" | "FOLLOW_UP" | "CHECKUP",
     notes: "",
   });
+  const [slots, setSlots] = useState<SlotInfo[]>([]);
+  const [slotsOpen, setSlotsOpen] = useState(true);
+  const [slotsReason, setSlotsReason] = useState<string | null>(null);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+
+  useEffect(() => {
+    if (!form.doctorId || !form.appointmentDate) {
+      setSlots([]);
+      setSlotsOpen(true);
+      setSlotsReason(null);
+      return;
+    }
+    let abort = false;
+    setLoadingSlots(true);
+    fetch(`/api/doctors/${form.doctorId}/slots?date=${form.appointmentDate}`)
+      .then((r) => r.json())
+      .then((body) => {
+        if (abort) return;
+        if (body?.success) {
+          setSlots(body.data.slots ?? []);
+          setSlotsOpen(body.data.open);
+          setSlotsReason(body.data.reason ?? null);
+          const stillValid = (body.data.slots as SlotInfo[] | undefined)?.some(
+            (s) => s.time === form.timeSlot && s.available,
+          );
+          if (!stillValid) setForm((f) => ({ ...f, timeSlot: "" }));
+        }
+      })
+      .finally(() => {
+        if (!abort) setLoadingSlots(false);
+      });
+    return () => {
+      abort = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.doctorId, form.appointmentDate]);
 
   const byDay = useMemo(() => {
     const map = new Map<string, Appt[]>();
@@ -146,6 +168,10 @@ export function AppointmentsBoard({
       toast.error("Pick a date");
       return;
     }
+    if (!form.timeSlot) {
+      toast.error("Pick a time slot");
+      return;
+    }
     setSubmitting(true);
     try {
       const res = await fetch("/api/appointments", {
@@ -160,7 +186,7 @@ export function AppointmentsBoard({
           timeSlot: form.timeSlot,
           type: form.type,
           notes: form.notes,
-          bookedVia: "RECEPTION",
+          bookedVia: "PHONE",
         }),
       });
       const body = await res.json();
@@ -168,7 +194,11 @@ export function AppointmentsBoard({
         toast.error(body?.error ?? "Failed");
         return;
       }
-      toast.success("Appointment booked");
+      toast.success(
+        body.data?.confirmation
+          ? `Booked · ${body.data.confirmation}`
+          : "Appointment booked",
+      );
       setOpen(false);
       setSelectedPatient(null);
       setForm({ ...form, patientName: "", patientPhone: "", notes: "" });
@@ -318,28 +348,69 @@ export function AppointmentsBoard({
                       setForm({ ...form, appointmentDate: v })
                     }
                     disablePast
+                    maxAhead={14}
                     placeholder="Pick date"
                   />
                 </div>
               </div>
-              <div>
-                <Label>Time</Label>
-                <Select
-                  value={form.timeSlot}
-                  onValueChange={(v) => v && setForm({ ...form, timeSlot: v })}
-                >
-                  <SelectTrigger className="mt-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TIME_SLOTS.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            </div>
+
+            <div>
+              <Label className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                Available time
+              </Label>
+              {!form.appointmentDate ? (
+                <div className="mt-1 rounded-md border border-dashed bg-muted/30 p-3 text-center text-xs text-muted-foreground">
+                  Pick a date first
+                </div>
+              ) : loadingSlots ? (
+                <div className="mt-1 flex items-center gap-2 rounded-md border bg-card p-3 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Loading slots...
+                </div>
+              ) : !slotsOpen ? (
+                <div className="mt-1 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-center text-xs text-amber-700">
+                  {slotsReason ?? "Doctor is closed on this day."}
+                </div>
+              ) : slots.length === 0 ? (
+                <div className="mt-1 rounded-md border border-dashed bg-muted/30 p-3 text-center text-xs text-muted-foreground">
+                  Doctor has no schedule set. Ask them to configure availability
+                  in <a href="/profile" className="text-primary hover:underline">My profile</a>.
+                </div>
+              ) : (
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {slots.map((s) => {
+                    const isSelected = form.timeSlot === s.time;
+                    const disabled = !s.available;
+                    return (
+                      <button
+                        key={s.time}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => setForm({ ...form, timeSlot: s.time })}
+                        title={
+                          s.past
+                            ? "Time has passed"
+                            : s.booked
+                              ? "Already booked"
+                              : undefined
+                        }
+                        className={cn(
+                          "rounded-full border px-2.5 py-1 text-[11px] font-medium transition",
+                          isSelected &&
+                            "border-primary bg-primary text-primary-foreground shadow-sm",
+                          !isSelected && s.available && "bg-card hover:bg-accent/60",
+                          s.booked && !isSelected && "border-dashed bg-muted text-muted-foreground line-through",
+                          s.past && !isSelected && "bg-muted/40 text-muted-foreground/50",
+                        )}
+                      >
+                        {s.time}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div>

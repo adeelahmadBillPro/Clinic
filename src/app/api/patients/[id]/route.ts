@@ -1,8 +1,39 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/permissions";
+import {
+  nameSchema,
+  phoneSchema,
+  optionalPhoneSchema,
+} from "@/lib/validations/common";
+
+const patchSchema = z.object({
+  name: nameSchema.optional(),
+  phone: phoneSchema.optional(),
+  gender: z.enum(["M", "F", "Other"]).optional(),
+  dob: z
+    .string()
+    .optional()
+    .nullable()
+    .refine((v) => !v || !isNaN(Date.parse(v)), "Invalid date")
+    .refine((v) => {
+      if (!v) return true;
+      const d = new Date(v);
+      return d <= new Date() && d.getFullYear() >= 1900;
+    }, "DOB must be in the past (after 1900)"),
+  address: z.string().max(300).optional().nullable(),
+  bloodGroup: z
+    .enum(["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", ""])
+    .optional()
+    .nullable(),
+  allergies: z.array(z.string().max(60)).max(20).optional(),
+  chronicConditions: z.array(z.string().max(80)).max(20).optional(),
+  emergencyContact: z.string().max(100).optional().nullable(),
+  emergencyPhone: optionalPhoneSchema,
+});
 
 export async function GET(
   _req: Request,
@@ -43,6 +74,82 @@ export async function GET(
     success: true,
     data: { ...patient, outstandingConsultation: outstanding },
   });
+}
+
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const { id } = await params;
+  const session = await auth();
+  if (!session?.user?.clinicId) {
+    return NextResponse.json(
+      { success: false, error: "Not authenticated" },
+      { status: 401 },
+    );
+  }
+  const t = db(session.user.clinicId);
+  const existing = await t.patient.findUnique({ where: { id } });
+  if (!existing) {
+    return NextResponse.json(
+      { success: false, error: "Patient not found" },
+      { status: 404 },
+    );
+  }
+
+  const json = await req.json().catch(() => ({}));
+  const parsed = patchSchema.safeParse(json);
+  if (!parsed.success) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid input",
+        field: parsed.error.issues[0]?.path.join("."),
+      },
+      { status: 400 },
+    );
+  }
+  const d = parsed.data;
+
+  const updated = await prisma.patient.update({
+    where: { id },
+    data: {
+      ...(d.name !== undefined ? { name: d.name } : {}),
+      ...(d.phone !== undefined ? { phone: d.phone } : {}),
+      ...(d.gender !== undefined ? { gender: d.gender } : {}),
+      ...(d.dob !== undefined
+        ? { dob: d.dob ? new Date(d.dob) : null }
+        : {}),
+      ...(d.address !== undefined ? { address: d.address || null } : {}),
+      ...(d.bloodGroup !== undefined
+        ? { bloodGroup: d.bloodGroup ? d.bloodGroup : null }
+        : {}),
+      ...(d.allergies !== undefined ? { allergies: d.allergies } : {}),
+      ...(d.chronicConditions !== undefined
+        ? { chronicConditions: d.chronicConditions }
+        : {}),
+      ...(d.emergencyContact !== undefined
+        ? { emergencyContact: d.emergencyContact || null }
+        : {}),
+      ...(d.emergencyPhone !== undefined
+        ? { emergencyPhone: d.emergencyPhone || null }
+        : {}),
+    },
+  });
+
+  await t.auditLog.create({
+    data: {
+      clinicId: session.user.clinicId,
+      userId: session.user.id,
+      userName: session.user.name ?? "User",
+      action: "PATIENT_UPDATED",
+      entityType: "Patient",
+      entityId: updated.id,
+      details: { fields: Object.keys(d) },
+    },
+  });
+
+  return NextResponse.json({ success: true, data: { id: updated.id } });
 }
 
 export async function DELETE(

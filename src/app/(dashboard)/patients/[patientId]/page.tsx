@@ -15,6 +15,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ArrowLeft } from "lucide-react";
 import { DeletePatientButton } from "@/components/patients/DeletePatientButton";
+import { EditPatientDialog } from "@/components/patients/EditPatientDialog";
 import { isAdmin } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
@@ -186,6 +187,19 @@ export default async function PatientEmrPage({
             >
               Issue token
             </Link>
+            <EditPatientDialog
+              patient={{
+                id: patient.id,
+                name: patient.name,
+                phone: patient.phone,
+                gender: patient.gender,
+                dob: patient.dob ? patient.dob.toISOString() : null,
+                address: patient.address,
+                bloodGroup: patient.bloodGroup,
+                emergencyContact: patient.emergencyContact,
+                emergencyPhone: patient.emergencyPhone,
+              }}
+            />
             {isAdmin(session.user.role) && (
               <DeletePatientButton
                 patientId={patient.id}
