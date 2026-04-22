@@ -16,7 +16,6 @@ import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -72,23 +71,23 @@ export function StaffCreatedDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="overflow-hidden bg-accent/40 sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="overflow-hidden p-0 sm:max-w-md">
+        <DialogHeader className="relative bg-accent/60 px-6 pt-8 pb-5">
           <DialogTitle className="sr-only">
             {creds.name} added to your team
           </DialogTitle>
           <motion.div
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col items-center gap-2 pt-1 text-center"
+            className="flex flex-col items-center gap-2 text-center"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-500/20">
-              <CheckCircle2 className="h-6 w-6" />
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-emerald-700 shadow-sm ring-1 ring-emerald-500/20">
+              <CheckCircle2 className="h-7 w-7" />
             </div>
             <div className="text-lg font-semibold text-accent-foreground">
               {creds.name} added to your team
             </div>
-            <div className="-mt-0.5 text-xs font-normal text-accent-foreground/70">
+            <div className="text-xs font-normal text-accent-foreground/70">
               Share these credentials so they can log in.
             </div>
           </motion.div>
@@ -98,7 +97,7 @@ export function StaffCreatedDialog({
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="space-y-2"
+          className="space-y-2 px-6 pt-5"
         >
           <CredRow
             icon={<LinkIcon className="h-3.5 w-3.5" />}
@@ -124,14 +123,18 @@ export function StaffCreatedDialog({
           />
         </motion.div>
 
-        <div className="mt-2 rounded-md bg-white/60 p-2.5 text-[11px] text-accent-foreground/80 ring-1 ring-inset ring-white/80">
+        <div className="mx-6 mt-4 rounded-md bg-muted/60 p-2.5 text-[11px] leading-relaxed text-muted-foreground ring-1 ring-inset ring-border/60">
           Ask them to change the password after their first login from{" "}
-          <span className="font-mono font-semibold">My profile</span>.
+          <span className="font-mono font-semibold text-foreground">
+            My profile
+          </span>
+          .
         </div>
 
-        <DialogFooter className="sm:justify-stretch">
+        <div className="mt-5 flex flex-wrap gap-2 border-t bg-muted/30 px-6 py-4">
           <Button
             variant="outline"
+            size="sm"
             onClick={() => copy(allCreds, "all")}
             className="flex-1"
           >
@@ -151,13 +154,15 @@ export function StaffCreatedDialog({
             href={waLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 text-sm font-medium text-white transition hover:bg-emerald-700"
+            className="inline-flex h-8 flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 text-xs font-medium text-white transition hover:bg-emerald-700"
           >
             <MessageCircle className="h-3.5 w-3.5" />
-            Send on WhatsApp
+            WhatsApp
           </a>
-          <Button onClick={onClose}>Done</Button>
-        </DialogFooter>
+          <Button size="sm" onClick={onClose}>
+            Done
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
@@ -179,7 +184,7 @@ function CredRow({
   onCopy: () => void;
 }) {
   return (
-    <div className="flex items-center gap-2 rounded-lg border bg-card p-2.5">
+    <div className="flex items-center gap-2.5 rounded-lg border bg-card p-2.5">
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
         {icon}
       </div>

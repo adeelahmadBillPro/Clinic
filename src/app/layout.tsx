@@ -44,7 +44,7 @@ export default function RootLayout({
           easing="cubic-bezier(0.22, 1, 0.36, 1)"
         />
         {children}
-        <Toaster richColors position="top-right" closeButton />
+        <Toaster position="top-right" closeButton expand={false} visibleToasts={4} />
       </body>
     </html>
   );
