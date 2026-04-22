@@ -6,7 +6,7 @@ import { ReceptionScreen } from "@/components/reception/ReceptionScreen";
 import { MyDayCard } from "@/components/shared/MyDayCard";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Reception — ClinicOS" };
+export const metadata = { title: "OPD — ClinicOS" };
 
 export default async function ReceptionPage() {
   const session = await auth();
@@ -15,6 +15,11 @@ export default async function ReceptionPage() {
   const t = db(session.user.clinicId);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  const clinic = await prisma.clinic.findUnique({
+    where: { id: session.user.clinicId },
+    select: { slug: true },
+  });
 
   const doctors = await t.doctor.findMany();
   const users = await prisma.user.findMany({
@@ -67,7 +72,10 @@ export default async function ReceptionPage() {
   return (
     <div className="space-y-5">
       <MyDayCard />
-      <ReceptionScreen initialDoctors={initialDoctors} />
+      <ReceptionScreen
+        initialDoctors={initialDoctors}
+        clinicSlug={clinic?.slug ?? null}
+      />
     </div>
   );
 }

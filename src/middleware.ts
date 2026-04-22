@@ -16,6 +16,8 @@ function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;
   if (pathname.startsWith("/book/")) return true;
   if (pathname.startsWith("/review/")) return true;
+  if (pathname.startsWith("/display/")) return true;
+  if (pathname.startsWith("/api/display/")) return true;
   if (pathname.startsWith("/_next")) return true;
   if (pathname.startsWith("/api/auth")) return true;
   if (pathname.startsWith("/api/register")) return true;

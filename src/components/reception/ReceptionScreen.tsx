@@ -42,8 +42,10 @@ type SelectedPatient = {
 
 export function ReceptionScreen({
   initialDoctors,
+  clinicSlug,
 }: {
   initialDoctors: Doctor[];
+  clinicSlug: string | null;
 }) {
   const [selected, setSelected] = useState<SelectedPatient | null>(null);
   const [doctors, setDoctors] = useState(initialDoctors);
@@ -133,12 +135,25 @@ export function ReceptionScreen({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Reception</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Register and check in patients, issue tokens, and track the live
-          queue.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">OPD</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Reception &middot; Register and check in walk-in patients, issue
+            tokens, and track the live queue board.
+          </p>
+        </div>
+        {clinicSlug && (
+          <a
+            href={`/display/${clinicSlug}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex h-9 items-center gap-1.5 rounded-md border bg-card px-3 text-sm font-medium transition hover:bg-accent/60"
+          >
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
+            Open display screen
+          </a>
+        )}
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,4fr)_minmax(0,6fr)]">

@@ -52,7 +52,7 @@ export const NAV: NavGroup[] = [
         roles: ["OWNER", "ADMIN"],
       },
       {
-        label: "Reception",
+        label: "OPD",
         href: "/reception",
         icon: "CircleUserRound",
         roles: ["OWNER", "ADMIN", "RECEPTIONIST"],

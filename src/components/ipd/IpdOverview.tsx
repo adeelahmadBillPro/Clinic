@@ -252,9 +252,30 @@ export function IpdOverview({
                       initial: { opacity: 0, y: 6 },
                       animate: { opacity: 1, y: 0 },
                     }}
-                    onClick={() =>
-                      bed.isOccupied ? setDischarge(bed) : setAdmitBed(bed)
-                    }
+                    onClick={async () => {
+                      if (!bed.isOccupied) {
+                        setAdmitBed(bed);
+                        return;
+                      }
+                      // Resolve the active admission for this bed and navigate
+                      try {
+                        const res = await fetch(
+                          "/api/ipd/admissions?status=ADMITTED",
+                        );
+                        const body = await res.json();
+                        const match = body?.data?.find(
+                          (a: { bed: { id: string } | null }) =>
+                            a.bed?.id === bed.id,
+                        );
+                        if (match?.id) {
+                          router.push(`/ipd/${match.id}`);
+                        } else {
+                          setDischarge(bed);
+                        }
+                      } catch {
+                        setDischarge(bed);
+                      }
+                    }}
                     className={cn(
                       "relative flex flex-col items-center justify-center gap-1.5 rounded-xl border p-3 text-center transition hover:border-primary/40 hover:shadow-sm",
                       bed.isOccupied
