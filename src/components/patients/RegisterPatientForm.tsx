@@ -292,7 +292,7 @@ export function RegisterPatientForm({
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-[auto_1fr_1fr]">
+      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label>Gender</Label>
           <Controller
@@ -302,16 +302,16 @@ export function RegisterPatientForm({
               <RadioGroup
                 value={field.value}
                 onValueChange={field.onChange}
-                className="mt-1.5 flex gap-1 rounded-md bg-muted p-1"
+                className="mt-1.5 grid grid-cols-3 gap-1 rounded-lg border bg-muted/40 p-1"
               >
                 {(["M", "F", "Other"] as const).map((g) => (
                   <label
                     key={g}
                     className={cn(
-                      "flex cursor-pointer items-center gap-1 rounded px-3 py-1.5 text-xs font-medium",
+                      "flex cursor-pointer items-center justify-center rounded-md px-3 py-1.5 text-xs font-medium transition",
                       field.value === g
-                        ? "bg-background text-foreground shadow-sm"
-                        : "text-muted-foreground",
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:bg-background",
                     )}
                   >
                     <RadioGroupItem value={g} className="sr-only" />
@@ -321,77 +321,6 @@ export function RegisterPatientForm({
               </RadioGroup>
             )}
           />
-        </div>
-        <div>
-          <div className="flex items-baseline justify-between">
-            <Label htmlFor="p-dob">
-              Date of birth{" "}
-              <span className="text-xs font-normal text-muted-foreground">
-                (or enter age)
-              </span>
-            </Label>
-            {ageLabel && (
-              <span className="text-xs font-medium text-primary">
-                {ageLabel}
-              </span>
-            )}
-          </div>
-          <Controller
-            control={control}
-            name="dob"
-            render={({ field }) => {
-              const dobVal = field.value ?? "";
-              const approxAge = dobVal
-                ? (() => {
-                    const d = new Date(dobVal);
-                    if (isNaN(d.getTime())) return "";
-                    const age =
-                      new Date().getFullYear() - d.getFullYear();
-                    return age >= 0 && age <= 130 ? String(age) : "";
-                  })()
-                : "";
-              return (
-                <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_90px] gap-2">
-                  <DatePicker
-                    id="p-dob"
-                    value={dobVal}
-                    onChange={field.onChange}
-                    placeholder="Pick DOB (optional)"
-                    disableFuture
-                    fromYear={1900}
-                    toYear={new Date().getFullYear()}
-                  />
-                  <input
-                    type="number"
-                    min={0}
-                    max={130}
-                    placeholder="Age"
-                    value={approxAge}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "") {
-                        field.onChange("");
-                        return;
-                      }
-                      const age = parseInt(v, 10);
-                      if (isNaN(age) || age < 0 || age > 130) return;
-                      const d = new Date();
-                      d.setFullYear(d.getFullYear() - age, 0, 1);
-                      d.setHours(0, 0, 0, 0);
-                      const iso = `${d.getFullYear()}-01-01`;
-                      field.onChange(iso);
-                    }}
-                    className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-                  />
-                </div>
-              );
-            }}
-          />
-          {errors.dob && (
-            <p className="mt-1 text-xs text-destructive">
-              {errors.dob.message}
-            </p>
-          )}
         </div>
         <div>
           <Label htmlFor="p-blood">Blood group</Label>
@@ -417,6 +346,77 @@ export function RegisterPatientForm({
             )}
           />
         </div>
+      </div>
+
+      <div>
+        <div className="flex items-baseline justify-between">
+          <Label htmlFor="p-dob">
+            Date of birth{" "}
+            <span className="text-xs font-normal text-muted-foreground">
+              (optional · or enter age)
+            </span>
+          </Label>
+          {ageLabel && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+              {ageLabel}
+            </span>
+          )}
+        </div>
+        <Controller
+          control={control}
+          name="dob"
+          render={({ field }) => {
+            const dobVal = field.value ?? "";
+            const approxAge = dobVal
+              ? (() => {
+                  const d = new Date(dobVal);
+                  if (isNaN(d.getTime())) return "";
+                  const age = new Date().getFullYear() - d.getFullYear();
+                  return age >= 0 && age <= 130 ? String(age) : "";
+                })()
+              : "";
+            return (
+              <div className="mt-1.5 grid grid-cols-[minmax(0,2fr)_110px] gap-2">
+                <DatePicker
+                  id="p-dob"
+                  value={dobVal}
+                  onChange={field.onChange}
+                  placeholder="Pick date of birth"
+                  disableFuture
+                  fromYear={1900}
+                  toYear={new Date().getFullYear()}
+                />
+                <input
+                  type="number"
+                  min={0}
+                  max={130}
+                  placeholder="Age (yrs)"
+                  value={approxAge}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "") {
+                      field.onChange("");
+                      return;
+                    }
+                    const age = parseInt(v, 10);
+                    if (isNaN(age) || age < 0 || age > 130) return;
+                    const d = new Date();
+                    d.setFullYear(d.getFullYear() - age, 0, 1);
+                    d.setHours(0, 0, 0, 0);
+                    const iso = `${d.getFullYear()}-01-01`;
+                    field.onChange(iso);
+                  }}
+                  className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                />
+              </div>
+            );
+          }}
+        />
+        {errors.dob && (
+          <p className="mt-1 text-xs text-destructive">
+            {errors.dob.message}
+          </p>
+        )}
       </div>
 
       <div>
