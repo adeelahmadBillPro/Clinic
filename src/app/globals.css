@@ -124,14 +124,20 @@
     background-image:
       radial-gradient(1200px 600px at 90% -10%, oklch(0.92 0.06 168 / 0.35), transparent 60%),
       radial-gradient(900px 500px at -10% 110%, oklch(0.90 0.04 200 / 0.25), transparent 55%);
-    background-attachment: fixed;
-    /* Native-app feel: kill the mobile tap highlight and disable pull-to-refresh bounce */
+    /* fixed attachment locks scroll on iOS Safari — use scroll attachment
+       which still looks fine and scrolls smoothly */
+    background-attachment: scroll;
+    /* Kill grey tap flash on iOS/Android (safe) */
     -webkit-tap-highlight-color: transparent;
-    overscroll-behavior-y: none;
+  }
+  @media (min-width: 1024px) {
+    body {
+      /* Only on desktop — parallax fixed bg feels premium there */
+      background-attachment: fixed;
+    }
   }
   html {
     overflow-x: hidden;
-    /* iOS smooth scroll */
     -webkit-text-size-adjust: 100%;
   }
   /* Any button feels tappable */
