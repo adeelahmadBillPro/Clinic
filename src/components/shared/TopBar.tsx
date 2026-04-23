@@ -5,6 +5,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { NotificationBell } from "./NotificationBell";
 import { SidebarCollapseToggle } from "./SidebarCollapseToggle";
 import { SidebarUser } from "./SidebarUser";
+import { MobilePageTitle } from "./MobilePageTitle";
 import type { ModuleFlag } from "@/lib/permissions";
 
 export async function TopBar({
@@ -18,7 +19,9 @@ export async function TopBar({
   if (!session?.user) return null;
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur-md sm:px-6">
+    <header
+      className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-background/85 px-3 pt-[max(env(safe-area-inset-top),0px)] backdrop-blur-md sm:h-16 sm:gap-3 sm:px-6"
+    >
       <MobileSidebar
         role={session.user.role}
         clinicName={clinicName}
@@ -27,13 +30,14 @@ export async function TopBar({
       />
       <SidebarCollapseToggle />
 
-      <div className="flex flex-1 items-center gap-3">
-        <div className="lg:hidden">
-          <div className="text-sm font-semibold tracking-tight">ClinicOS</div>
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        {/* Mobile: contextual page title. Desktop: nothing here (sidebar shows name). */}
+        <div className="min-w-0 flex-1 truncate lg:hidden">
+          <MobilePageTitle />
         </div>
       </div>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 sm:gap-1">
         <NotificationBell />
         <ThemeToggle />
         <UserMenu

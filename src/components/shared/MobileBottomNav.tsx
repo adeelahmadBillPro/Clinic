@@ -11,14 +11,25 @@ import { cn } from "@/lib/utils";
 export function MobileBottomNav({ role }: { role: Role }) {
   const pathname = usePathname();
   const items = bottomBarForRole(role);
+  const count = Math.min(items.length, 4);
+
+  if (items.length === 0) return null;
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/92 pb-[max(env(safe-area-inset-bottom),4px)] backdrop-blur-lg lg:hidden"
+      className={cn(
+        "fixed inset-x-0 bottom-0 z-30 border-t border-border/60 bg-background/92 backdrop-blur-xl",
+        "pb-[max(env(safe-area-inset-bottom),6px)]",
+        "lg:hidden",
+      )}
       aria-label="Primary navigation"
+      style={{ boxShadow: "0 -1px 12px oklch(0 0 0 / 0.04)" }}
     >
-      <ul className="grid grid-cols-4 px-1">
-        {items.map((item) => {
+      <ul
+        className="mx-auto grid max-w-md px-2 pt-1.5"
+        style={{ gridTemplateColumns: `repeat(${count}, minmax(0, 1fr))` }}
+      >
+        {items.slice(0, count).map((item) => {
           const active =
             pathname === item.href || pathname.startsWith(item.href + "/");
           return (
@@ -26,32 +37,43 @@ export function MobileBottomNav({ role }: { role: Role }) {
               <Link
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium",
+                  "group relative flex flex-col items-center gap-0.5 rounded-xl py-1.5 text-[10px] font-medium transition",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
                 aria-current={active ? "page" : undefined}
               >
-                {active && (
-                  <motion.span
-                    layoutId="bottomnav-active"
-                    className="absolute inset-x-4 top-0 h-0.5 rounded-full bg-primary"
-                    transition={{
-                      type: "spring",
-                      stiffness: 400,
-                      damping: 34,
-                    }}
-                  />
-                )}
                 <motion.span
-                  whileTap={{ scale: 0.9 }}
+                  whileTap={{ scale: 0.88 }}
+                  transition={{ type: "spring", stiffness: 500, damping: 28 }}
+                  className="relative flex h-10 w-16 items-center justify-center"
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="bottomnav-pill"
+                      className="absolute inset-0 rounded-2xl bg-primary/12"
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 30,
+                      }}
+                    />
+                  )}
+                  <Icon
+                    name={item.icon}
+                    className={cn(
+                      "relative h-5 w-5 transition",
+                      active && "scale-110",
+                    )}
+                  />
+                </motion.span>
+                <span
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-lg",
-                    active && "bg-primary/10",
+                    "relative leading-none tracking-tight transition",
+                    active && "font-semibold",
                   )}
                 >
-                  <Icon name={item.icon} className="h-5 w-5" />
-                </motion.span>
-                <span className="leading-none">{item.label}</span>
+                  {item.label}
+                </span>
               </Link>
             </li>
           );

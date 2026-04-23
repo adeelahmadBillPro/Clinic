@@ -8,6 +8,7 @@ import { TrialBanner } from "@/components/shared/TrialBanner";
 import { SidebarUser } from "@/components/shared/SidebarUser";
 import { AccessDeniedToast } from "@/components/shared/AccessDeniedToast";
 import { Suspense } from "react";
+import { cn } from "@/lib/utils";
 
 export default async function DashboardLayout({
   children,
@@ -54,7 +55,14 @@ export default async function DashboardLayout({
         />
         <TopBar clinicName={clinic?.name} enabledModules={moduleSettings} />
 
-        <main className="flex-1 overflow-x-hidden px-4 pb-24 pt-6 sm:px-6 lg:pb-10">
+        <main
+          className={cn(
+            "flex-1 overflow-x-hidden px-3 sm:px-6",
+            "pt-4 sm:pt-6",
+            // Bottom nav is ~68px on mobile — pad enough + add safe-area bottom
+            "pb-[calc(80px+env(safe-area-inset-bottom,0px))] lg:pb-10",
+          )}
+        >
           <Suspense fallback={null}>
             <AccessDeniedToast />
           </Suspense>
