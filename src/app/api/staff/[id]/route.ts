@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
 import { isAdmin } from "@/lib/permissions";
+import { getIp } from "@/lib/utils";
 import { z } from "zod";
 import { nameSchema, optionalPhoneSchema } from "@/lib/validations/common";
 
@@ -103,6 +104,7 @@ export async function PATCH(
         clinicId: session.user.clinicId,
         userId: session.user.id,
         userName: session.user.name ?? "User",
+        ipAddress: getIp(req),
         action: data.isActive ? "STAFF_ADDED" : "STAFF_DEACTIVATED",
         entityType: "User",
         entityId: user.id,
@@ -196,7 +198,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
@@ -274,6 +276,7 @@ export async function DELETE(
         clinicId: session.user.clinicId,
         userId: session.user.id,
         userName: session.user.name ?? "User",
+        ipAddress: getIp(req),
         action: "STAFF_DEACTIVATED_ON_DELETE",
         entityType: "User",
         entityId: user.id,
@@ -305,6 +308,7 @@ export async function DELETE(
       clinicId: session.user.clinicId,
       userId: session.user.id,
       userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
       action: "STAFF_DELETED",
       entityType: "User",
       entityId: user.id,

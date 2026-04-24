@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { ReceptionScreen } from "@/components/reception/ReceptionScreen";
@@ -9,8 +8,11 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "OPD — ClinicOS" };
 
 export default async function ReceptionPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "RECEPTIONIST"],
+    "/reception",
+  );
 
   const t = db(session.user.clinicId);
   const today = new Date();

@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { SuppliersClient } from "@/components/inventory/SuppliersClient";
 
@@ -7,8 +6,11 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Suppliers — ClinicOS" };
 
 export default async function SuppliersPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "PHARMACIST"],
+    "/inventory/suppliers",
+  );
 
   const t = db(session.user.clinicId);
   const suppliers = await t.supplier.findMany({ orderBy: { name: "asc" } });

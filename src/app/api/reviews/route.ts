@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { nameSchema, optionalPhoneSchema } from "@/lib/validations/common";
+import { rateLimit, getIp, LIMITS } from "@/lib/rate-limit";
 
 const submitSchema = z.object({
   confirmation: z
@@ -34,6 +35,26 @@ function findByConfirmation(confirmation: string) {
 }
 
 export async function POST(req: Request) {
+  // Public endpoint — bucket per IP to blunt casual abuse.
+  const ip = getIp(req);
+  const gate = rateLimit(
+    `reviews:${ip}`,
+    LIMITS.REVIEWS_PER_HOUR.max,
+    LIMITS.REVIEWS_PER_HOUR.windowMs,
+  );
+  if (!gate.ok) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Too many reviews from this IP. Try again later.",
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(gate.retryAfterSec) },
+      },
+    );
+  }
+
   const json = await req.json().catch(() => null);
   const parsed = submitSchema.safeParse(json);
   if (!parsed.success) {
@@ -52,16 +73,14 @@ export async function POST(req: Request) {
     );
   }
 
-  // Only allow review after appointment date (same-day ok)
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const apptDay = new Date(appt.appointmentDate);
-  apptDay.setHours(0, 0, 0, 0);
-  if (apptDay.getTime() > today.getTime()) {
+  // Only COMPLETED appointments can be reviewed. Prevents trolling by
+  // no-show patients and spammers who guess confirmation codes for future
+  // appointments.
+  if (appt.status !== "COMPLETED") {
     return NextResponse.json(
       {
         success: false,
-        error: "You can leave a review on or after your appointment date",
+        error: "Reviews open once the appointment is marked completed",
       },
       { status: 400 },
     );
@@ -88,6 +107,8 @@ export async function POST(req: Request) {
       reviewerPhone: data.reviewerPhone || appt.patientPhone,
       rating: data.rating,
       comment: data.comment || null,
+      // Stays in moderation queue until an admin publishes — see
+      // /api/reviews/[id]/publish and /reject.
     },
   });
 

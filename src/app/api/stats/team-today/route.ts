@@ -47,7 +47,8 @@ export async function GET() {
         paidAmount: true,
         balance: true,
         collectedBy: true,
-        items: true,
+        // doctorId is the authoritative attribution — see P3-33.
+        doctorId: true,
       },
     }),
     t.token.findMany({
@@ -70,21 +71,11 @@ export async function GET() {
     const waiting = tokens.filter(
       (x) => x.doctorId === d.id && x.status === "WAITING",
     ).length;
-    // Attribute OPD bills to this doctor by matching the consultation
-    // description prefix.
+    // Attribute bills to doctors by explicit doctorId. The old
+    // description-substring match collided when two doctors shared a
+    // specialization ("Cardiology" matched "Cardiothoracic", etc.).
     const collected = bills
-      .filter((b) => {
-        if (b.billType !== "OPD") return false;
-        const items = Array.isArray(b.items)
-          ? (b.items as Array<{ description?: string }>)
-          : [];
-        return items.some(
-          (it) =>
-            (it.description ?? "")
-              .toLowerCase()
-              .includes(d.specialization.toLowerCase()),
-        );
-      })
+      .filter((b) => b.doctorId === d.id)
       .reduce((s, b) => s + Number(b.paidAmount), 0);
     const share = collected * (Number(d.revenueSharePct) / 100);
     return {

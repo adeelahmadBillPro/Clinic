@@ -3,6 +3,8 @@ import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
+import { nextSequence, pad } from "@/lib/counter";
 
 const schema = z.object({
   patientId: z.string().min(1),
@@ -63,7 +65,10 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Admitting a patient — ward staff (nurse/doctor) + admins.
+  const gate = await requireApiRole(["OWNER", "ADMIN", "DOCTOR", "NURSE"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -81,13 +86,33 @@ export async function POST(req: Request) {
   const clinicId = session.user.clinicId;
   const t = db(clinicId);
 
-  const bed = await t.bed.findUnique({ where: { id: parsed.data.bedId } });
+  // Validate all three FKs are in-tenant. `db(clinicId)` scopes findUnique,
+  // so a cross-tenant ID resolves to null.
+  const [bed, patient, doctor] = await Promise.all([
+    t.bed.findUnique({ where: { id: parsed.data.bedId } }),
+    t.patient.findUnique({ where: { id: parsed.data.patientId } }),
+    t.doctor.findUnique({ where: { id: parsed.data.doctorId } }),
+  ]);
   if (!bed) {
     return NextResponse.json(
-      { success: false, error: "Bed not found" },
+      { success: false, error: "Bed not found", field: "bedId" },
       { status: 404 },
     );
   }
+  if (!patient) {
+    return NextResponse.json(
+      { success: false, error: "Patient not found", field: "patientId" },
+      { status: 404 },
+    );
+  }
+  if (!doctor) {
+    return NextResponse.json(
+      { success: false, error: "Doctor not found", field: "doctorId" },
+      { status: 404 },
+    );
+  }
+  // Check outside the tx is a fast-path; the CAS inside the tx is what
+  // actually prevents two concurrent admits from double-booking the bed.
   if (bed.isOccupied) {
     return NextResponse.json(
       { success: false, error: "Bed is already occupied" },
@@ -96,40 +121,58 @@ export async function POST(req: Request) {
   }
 
   const year = new Date().getFullYear();
-  const last = await t.ipdAdmission.findFirst({
-    where: { admissionNumber: { startsWith: `ADM-${year}-` } },
-    orderBy: { admissionNumber: "desc" },
-    select: { admissionNumber: true },
-  });
-  let nextNum = 1;
-  if (last?.admissionNumber) {
-    const m = last.admissionNumber.match(/-(\d+)$/);
-    if (m) nextNum = parseInt(m[1], 10) + 1;
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // Atomic bed grab — only succeeds if the bed is still free and
+      // active for THIS clinic. A second concurrent admit sees count=0
+      // and bails without creating the admission row.
+      const grab = await tx.bed.updateMany({
+        where: {
+          id: parsed.data.bedId,
+          clinicId,
+          isOccupied: false,
+          isActive: true,
+        },
+        data: {
+          isOccupied: true,
+          currentPatientId: parsed.data.patientId,
+        },
+      });
+      if (grab.count === 0) {
+        throw new BedTakenError();
+      }
+
+      const seq = await nextSequence(clinicId, "ADM", tx, year);
+      const admissionNumber = `ADM-${year}-${pad(seq, 4)}`;
+      const adm = await tx.ipdAdmission.create({
+        data: {
+          clinicId,
+          admissionNumber,
+          patientId: parsed.data.patientId,
+          bedId: parsed.data.bedId,
+          doctorId: parsed.data.doctorId,
+          admissionDiagnosis: parsed.data.admissionDiagnosis ?? null,
+          admissionNotes: parsed.data.admissionNotes ?? null,
+          status: "ADMITTED",
+        },
+      });
+      return adm;
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: { id: result.id, admissionNumber: result.admissionNumber },
+    });
+  } catch (err) {
+    if (err instanceof BedTakenError) {
+      return NextResponse.json(
+        { success: false, error: "Bed was just taken. Pick another." },
+        { status: 409 },
+      );
+    }
+    throw err;
   }
-  const admissionNumber = `ADM-${year}-${String(nextNum).padStart(4, "0")}`;
-
-  const result = await prisma.$transaction(async (tx) => {
-    const adm = await tx.ipdAdmission.create({
-      data: {
-        clinicId,
-        admissionNumber,
-        patientId: parsed.data.patientId,
-        bedId: parsed.data.bedId,
-        doctorId: parsed.data.doctorId,
-        admissionDiagnosis: parsed.data.admissionDiagnosis ?? null,
-        admissionNotes: parsed.data.admissionNotes ?? null,
-        status: "ADMITTED",
-      },
-    });
-    await tx.bed.update({
-      where: { id: bed.id },
-      data: { isOccupied: true, currentPatientId: parsed.data.patientId },
-    });
-    return adm;
-  });
-
-  return NextResponse.json({
-    success: true,
-    data: { id: result.id, admissionNumber: result.admissionNumber },
-  });
 }
+
+class BedTakenError extends Error {}

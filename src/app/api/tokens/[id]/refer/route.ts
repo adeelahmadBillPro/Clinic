@@ -4,6 +4,7 @@ import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { nextTokenNumber, tokenExpiryFromNow } from "@/lib/token";
+import { getIp } from "@/lib/utils";
 
 const schema = z.object({
   toDoctorId: z.string().min(1, "Pick a doctor"),
@@ -146,6 +147,7 @@ export async function POST(
         clinicId,
         userId: session.user.id,
         userName: session.user.name ?? "User",
+        ipAddress: getIp(req),
         action: "PATIENT_REFERRED",
         entityType: "Token",
         entityId: newToken.id,

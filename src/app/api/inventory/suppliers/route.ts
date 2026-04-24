@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Name too short").max(200),
@@ -32,7 +33,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Supplier master data — pharmacy staff + admins.
+  const gate = await requireApiRole(["OWNER", "ADMIN", "PHARMACIST"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },

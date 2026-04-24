@@ -1,6 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { ArrowLeft } from "lucide-react";
@@ -15,8 +15,11 @@ export default async function PrescriptionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"],
+    "/prescriptions/[id]",
+  );
 
   const t = db(session.user.clinicId);
   const rx = await t.prescription.findUnique({ where: { id } });

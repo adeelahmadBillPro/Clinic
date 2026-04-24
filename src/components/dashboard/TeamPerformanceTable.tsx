@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
+import { usePolling } from "@/lib/hooks/usePolling";
 import {
   Stethoscope,
   Users,
@@ -63,11 +64,7 @@ export function TeamPerformanceTable() {
     }
   }
 
-  useEffect(() => {
-    load();
-    const i = setInterval(load, 30000);
-    return () => clearInterval(i);
-  }, []);
+  usePolling(load, 30000);
 
   return (
     <motion.div

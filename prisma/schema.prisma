@@ -13,6 +13,10 @@ datasource db {
 
 // ─── PUBLIC SCHEMA ─────────────────────────────────────────
 
+// Email is globally unique — one person, one account, one clinic. The
+// login flow resolves by email alone, which would need a clinic selector
+// to support multi-clinic staff. Keep simple for now; flag for review if
+// we ever need a receptionist to serve two clinics from one email.
 model User {
   id                   String    @id @default(cuid())
   name                 String
@@ -23,6 +27,12 @@ model User {
   clinicId             String?
   photoUrl             String?
   isActive             Boolean   @default(true)
+  // Email verification — null until the user clicks the link in the
+  // signup email. `auth.ts` rejects logins when this is null.
+  emailVerifiedAt      DateTime?
+  emailVerifyTokenHash String?
+  // Set when the user checks the terms & privacy box at signup (P4-51).
+  acceptedTermsAt      DateTime?
   lastLoginAt          DateTime?
   failedLoginAttempts  Int       @default(0)
   lockedUntil          DateTime?
@@ -48,6 +58,35 @@ model Clinic {
   isActive         Boolean   @default(true)
   settings         Json      @default("{}")
   createdAt        DateTime  @default(now())
+
+  // Reverse relations — Prisma needs these declared to generate the FK
+  // constraints on the child side. `onDelete: Cascade` lives on the child;
+  // here we just expose the collections.
+  patients         Patient[]
+  doctors          Doctor[]
+  tokens           Token[]
+  appointments     Appointment[]
+  consultations    Consultation[]
+  vitals           VitalSigns[]
+  prescriptions    Prescription[]
+  medicines        Medicine[]
+  pharmacyOrders   PharmacyOrder[]
+  suppliers        Supplier[]
+  purchaseOrders   PurchaseOrder[]
+  stockMovements   StockMovement[]
+  beds             Bed[]
+  admissions       IpdAdmission[]
+  nursingNotes     NursingNote[]
+  labOrders        LabOrder[]
+  bills            Bill[]
+  cashShifts       CashShift[]
+  auditLogs        AuditLog[]
+  notifications    Notification[]
+  reviews          Review[]
+  upgradeRequests  UpgradeRequest[]
+  subscriptions    Subscription[]
+  counters         Counter[]
+  rxTemplates      PrescriptionTemplate[]
 }
 
 model Plan {
@@ -73,6 +112,8 @@ model Subscription {
   currentPeriodEnd     DateTime?
   cancelAtPeriodEnd    Boolean   @default(false)
   createdAt            DateTime  @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 }
 
 model UpgradeRequest {
@@ -94,6 +135,8 @@ model UpgradeRequest {
   reviewNotes     String?
   createdAt       DateTime  @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@index([status, createdAt])
   @@index([clinicId])
 }
@@ -114,9 +157,14 @@ model Patient {
   chronicConditions String[]
   emergencyContact  String?
   emergencyPhone    String?
+  // Honour "STOP" replies and clinic-flagged opt-outs. Every callsite of
+  // sendWhatsApp for patient messages must check this first.
+  optOutWhatsApp    Boolean   @default(false)
   isActive          Boolean   @default(true)
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@unique([clinicId, mrn])
   @@index([clinicId])
@@ -134,8 +182,12 @@ model Review {
   reviewerPhone  String?
   rating         Int
   comment        String?
-  isPublished    Boolean  @default(true)
+  // Reviews enter a moderation queue by default — an admin must publish.
+  // Previously published by default, which made review abuse trivial.
+  isPublished    Boolean  @default(false)
   createdAt      DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@index([clinicId, doctorId])
   @@index([clinicId, createdAt])
@@ -160,6 +212,8 @@ model Doctor {
   gender          String?
   whatsappNumber  String?
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@index([clinicId])
 }
 
@@ -181,6 +235,8 @@ model Token {
   completedAt    DateTime?
   cancelReason   String?
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@index([clinicId, status])
   @@index([clinicId, doctorId, issuedAt])
 }
@@ -200,6 +256,8 @@ model Appointment {
   notes           String?
   bookedVia       String     @default("RECEPTION")
   createdAt       DateTime   @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@index([clinicId, appointmentDate])
   @@index([clinicId, doctorId, appointmentDate])
@@ -222,6 +280,8 @@ model Consultation {
   followUpNotes  String?
   createdAt      DateTime  @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@index([clinicId, patientId])
   @@index([clinicId, doctorId])
 }
@@ -242,6 +302,8 @@ model VitalSigns {
   bmi            Decimal?
   recordedAt     DateTime @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@index([clinicId, patientId])
 }
 
@@ -256,6 +318,8 @@ model Prescription {
   status         PrescriptionStatus
   sentAt         DateTime?
   createdAt      DateTime           @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@index([clinicId, status])
   @@index([clinicId, patientId])
@@ -279,6 +343,8 @@ model Medicine {
   isActive      Boolean   @default(true)
   createdAt     DateTime  @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@index([clinicId, name])
   @@index([clinicId, isActive])
 }
@@ -297,6 +363,8 @@ model PharmacyOrder {
   notes          String?
   createdAt      DateTime    @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@unique([clinicId, orderNumber])
   @@index([clinicId, status])
 }
@@ -311,6 +379,8 @@ model Supplier {
   address   String?
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@index([clinicId])
 }
@@ -330,6 +400,8 @@ model PurchaseOrder {
   createdBy     String
   createdAt     DateTime  @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@unique([clinicId, poNumber])
   @@index([clinicId, status])
 }
@@ -345,6 +417,8 @@ model StockMovement {
   doneBy     String
   createdAt  DateTime @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@index([clinicId, medicineId])
 }
 
@@ -358,6 +432,8 @@ model Bed {
   isOccupied       Boolean @default(false)
   isActive         Boolean @default(true)
   currentPatientId String?
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@unique([clinicId, bedNumber])
   @@index([clinicId, isOccupied])
@@ -379,6 +455,8 @@ model IpdAdmission {
   status             AdmissionStatus
   totalCharges       Decimal         @default(0)
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@unique([clinicId, admissionNumber])
   @@index([clinicId, status])
 }
@@ -394,6 +472,8 @@ model NursingNote {
   medications  Json?
   observations String?
   createdAt    DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@index([clinicId, admissionId])
 }
@@ -416,6 +496,8 @@ model LabOrder {
   completedAt       DateTime?
   createdAt         DateTime  @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@unique([clinicId, orderNumber])
   @@index([clinicId, status])
 }
@@ -425,6 +507,11 @@ model Bill {
   clinicId       String
   billNumber     String
   patientId      String
+  // Attributing bills to doctors by matching bill-item description against
+  // the doctor's specialization produced wrong splits when two doctors
+  // shared a specialization. Store the doctorId explicitly when the bill
+  // is generated so stats can filter by it.
+  doctorId       String?
   billType       BillType
   admissionId    String?
   items          Json
@@ -441,9 +528,12 @@ model Bill {
   notes          String?
   createdAt      DateTime   @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@unique([clinicId, billNumber])
   @@index([clinicId, status])
   @@index([clinicId, createdAt])
+  @@index([clinicId, doctorId])
 }
 
 model CashShift {
@@ -462,6 +552,11 @@ model CashShift {
   submittedAt    DateTime?
   createdAt      DateTime  @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  // One shift row per (user, day, shift type) — prevents double-open and
+  // double-submit when a user refreshes the end-of-shift form.
+  @@unique([clinicId, userId, shiftDate, shiftType])
   @@index([clinicId, shiftDate])
   @@index([clinicId, userId])
 }
@@ -477,6 +572,8 @@ model AuditLog {
   details    Json?
   ipAddress  String?
   createdAt  DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
 
   @@index([clinicId, createdAt])
   @@index([clinicId, userId])
@@ -495,8 +592,45 @@ model Notification {
   sentAt    DateTime?
   createdAt DateTime  @default(now())
 
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
   @@index([clinicId, status])
   @@index([clinicId, userId])
+}
+
+// Per-doctor prescription templates. Previously stored in localStorage,
+// which meant templates vanished when the doctor moved between devices
+// (or between dev/prod). One row per (clinic, user, name).
+model PrescriptionTemplate {
+  id        String   @id @default(cuid())
+  clinicId  String
+  userId    String
+  name      String
+  items     Json
+  createdAt DateTime @default(now())
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, userId, name])
+  @@index([clinicId, userId])
+}
+
+// Per-(clinic, kind, year) atomic sequence counter. The prior pattern of
+// "findFirst desc + parse digits + +1" raced under concurrent writes and
+// could produce duplicate bill / PO / lab / admission numbers.
+// `src/lib/counter.ts` upserts then increments in a single statement.
+model Counter {
+  id        String   @id @default(cuid())
+  clinicId  String
+  kind      String
+  year      Int
+  value     Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  clinic Clinic @relation(fields: [clinicId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicId, kind, year])
+  @@index([clinicId])
 }
 
 // ─── ENUMS ──────────────────────────────────────────────────

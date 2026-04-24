@@ -12,8 +12,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { usePolling } from "@/lib/hooks/usePolling";
 import { ConsultationPanel } from "./ConsultationPanel";
 import { DoctorStatusSwitcher } from "./DoctorStatusSwitcher";
 
@@ -111,12 +111,8 @@ export function DoctorDesk({
     loadDoctors();
   }, [loadDoctors]);
 
-  useEffect(() => {
-    loadQueue();
-    if (!selectedDoctorId) return;
-    const i = setInterval(loadQueue, 8000);
-    return () => clearInterval(i);
-  }, [loadQueue, selectedDoctorId]);
+  // loadQueue itself no-ops when selectedDoctorId is null, so polling is safe.
+  usePolling(loadQueue, 8000);
 
   useEffect(() => {
     // Auto-pick first in-progress or called token

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
 import { nextTokenNumber, tokenExpiryFromNow } from "@/lib/token";
 import { nextMrn } from "@/lib/mrn";
+import { requireApiRole } from "@/lib/api-guards";
+import { getIp } from "@/lib/utils";
 
 const patchSchema = z.object({
   status: z
@@ -36,7 +37,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const session = await auth();
+  // Check-in / status transitions — reception + doctor + admins.
+  const gate = await requireApiRole([
+    "OWNER",
+    "ADMIN",
+    "RECEPTIONIST",
+    "DOCTOR",
+  ]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -67,7 +76,22 @@ export async function PATCH(
     let patientId = appt.patientId;
 
     if (!patientId && parsed.data.linkExistingPatientId) {
-      patientId = parsed.data.linkExistingPatientId;
+      // Reject IDs that belong to a different tenant — `db(clinicId)`
+      // resolves to null for out-of-tenant rows.
+      const existing = await t.patient.findUnique({
+        where: { id: parsed.data.linkExistingPatientId },
+      });
+      if (!existing) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Selected patient not found in this clinic",
+            field: "linkExistingPatientId",
+          },
+          { status: 404 },
+        );
+      }
+      patientId = existing.id;
     }
 
     if (!patientId && parsed.data.createPatient) {
@@ -90,6 +114,7 @@ export async function PATCH(
           clinicId,
           userId: session.user.id,
           userName: session.user.name ?? "User",
+          ipAddress: getIp(req),
           action: "PATIENT_REGISTERED",
           entityType: "Patient",
           entityId: created.id,

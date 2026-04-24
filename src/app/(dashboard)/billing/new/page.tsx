@@ -1,13 +1,16 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { NewBillForm } from "@/components/billing/NewBillForm";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "New bill — ClinicOS" };
 
 export default async function NewBillPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST"],
+    "/billing/new",
+  );
+  void session;
   return (
     <div className="space-y-6">
       <div>

@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
+import { getIp } from "@/lib/utils";
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
@@ -43,6 +44,7 @@ export async function DELETE(
       clinicId: session.user.clinicId,
       userId: session.user.id,
       userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
       action: "PHARMACY_ORDER_CANCELLED",
       entityType: "PharmacyOrder",
       entityId: id,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Loader2, RefreshCcw, Search, X } from "lucide-react";
@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { usePolling } from "@/lib/hooks/usePolling";
 import { DispenseDialog } from "./DispenseDialog";
 
 export type PharmacyOrder = {
@@ -77,12 +78,7 @@ export function PharmacyQueue() {
     }
   }, [tab]);
 
-  useEffect(() => {
-    setLoading(true);
-    load();
-    const i = setInterval(load, 10000);
-    return () => clearInterval(i);
-  }, [load]);
+  usePolling(load, 10000);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

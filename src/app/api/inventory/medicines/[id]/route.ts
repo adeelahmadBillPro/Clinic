@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
 
 const patchSchema = z.object({
   name: z.string().optional(),
@@ -29,7 +29,10 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const session = await auth();
+  // Editing a medicine / adjusting stock is a pharmacy operation.
+  const gate = await requireApiRole(["OWNER", "ADMIN", "PHARMACIST"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -106,7 +109,10 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const session = await auth();
+  // Soft-deleting a medicine is a pharmacy operation.
+  const gate = await requireApiRole(["OWNER", "ADMIN", "PHARMACIST"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },

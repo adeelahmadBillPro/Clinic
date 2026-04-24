@@ -5,6 +5,8 @@ import { db } from "@/lib/tenant-db";
 import { createPatientSchema } from "@/lib/validations/patient";
 import { nextMrn } from "@/lib/mrn";
 import { nextTokenNumber, tokenExpiryFromNow } from "@/lib/token";
+import { nextSequence, pad } from "@/lib/counter";
+import { getIp } from "@/lib/utils";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -135,6 +137,7 @@ export async function POST(req: Request) {
       clinicId: session.user.clinicId,
       userId: session.user.id,
       userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
       action: "PATIENT_REGISTERED",
       entityType: "Patient",
       entityId: patient.id,
@@ -186,18 +189,10 @@ export async function POST(req: Request) {
       // the patient later buys medicines at the clinic pharmacy.
       const fee = Number(doctor.consultationFee);
       if (fee > 0) {
+        // Atomic sequence — see src/lib/counter.ts.
         const year = new Date().getFullYear();
-        const last = await t.bill.findFirst({
-          where: { billNumber: { startsWith: `BL-${year}-` } },
-          orderBy: { billNumber: "desc" },
-          select: { billNumber: true },
-        });
-        let nextNum = 1;
-        if (last?.billNumber) {
-          const match = last.billNumber.match(/-(\d+)$/);
-          if (match) nextNum = parseInt(match[1], 10) + 1;
-        }
-        const billNumber = `BL-${year}-${String(nextNum).padStart(4, "0")}`;
+        const seq = await nextSequence(session.user.clinicId, "BILL", undefined, year);
+        const billNumber = `BL-${year}-${pad(seq, 4)}`;
 
         const paid = data.feePaidNow ? fee : 0;
         const billRow = await t.bill.create({
@@ -205,6 +200,8 @@ export async function POST(req: Request) {
             clinicId: session.user.clinicId,
             billNumber,
             patientId: patient.id,
+            // doctorId attribution — see P3-33.
+            doctorId: doctor.id,
             billType: "OPD" as const,
             items: [
               {

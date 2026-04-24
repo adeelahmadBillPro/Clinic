@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { PatientsClient } from "@/components/patients/PatientsClient";
 
@@ -7,8 +6,11 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Patients — ClinicOS" };
 
 export default async function PatientsPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "DOCTOR", "RECEPTIONIST", "NURSE"],
+    "/patients",
+  );
 
   const t = db(session.user.clinicId);
 

@@ -48,11 +48,15 @@ export function PatientsClient({ initial }: { initial: Row[] }) {
       setRows(initial);
       return;
     }
+    // Cancel in-flight fetches when the query changes — see PatientSearch
+    // for the same pattern.
+    const ac = new AbortController();
     const handle = setTimeout(async () => {
       setLoading(true);
       try {
         const res = await fetch(
           `/api/patients?q=${encodeURIComponent(q)}&limit=50`,
+          { signal: ac.signal },
         );
         const body = await res.json();
         if (body?.success) {
@@ -64,11 +68,16 @@ export function PatientsClient({ initial }: { initial: Row[] }) {
             })),
           );
         }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") throw e;
       } finally {
         setLoading(false);
       }
     }, 220);
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      ac.abort();
+    };
   }, [q, initial]);
 
   return (

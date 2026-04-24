@@ -12,7 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/shared/Logo";
-import { whatsappLinkForSlip } from "@/lib/whatsapp";
+import { whatsappLinkForPhone, buildTokenSlipText } from "@/lib/whatsapp";
+import { toast } from "sonner";
 
 type Slip = {
   displayToken: string;
@@ -62,7 +63,20 @@ export function TokenSlipDialog({
     win.document.close();
   }
 
-  const waUrl = whatsappLinkForSlip(slip);
+  // PHI in wa.me `?text=` leaks through browser history and wa.me's
+  // redirector. Keep the message on the clipboard and open a link with
+  // the phone number only — the user pastes on the WhatsApp side.
+  const waUrl = whatsappLinkForPhone(slip.patientPhone);
+  async function handleWhatsApp(e: React.MouseEvent<HTMLAnchorElement>) {
+    try {
+      await navigator.clipboard.writeText(buildTokenSlipText(slip));
+      toast.success("Slip copied. Paste it into WhatsApp.");
+    } catch {
+      // Clipboard can fail in non-secure contexts; let the link still open.
+      e.preventDefault();
+      toast.error("Couldn't copy — copy the printed slip manually.");
+    }
+  }
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
@@ -122,11 +136,12 @@ export function TokenSlipDialog({
           <a
             href={waUrl}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
+            onClick={handleWhatsApp}
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
           >
             <MessageCircle className="h-3.5 w-3.5" />
-            WhatsApp
+            Copy + WhatsApp
           </a>
         </DialogFooter>
       </DialogContent>

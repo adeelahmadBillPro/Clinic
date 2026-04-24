@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { usePolling } from "@/lib/hooks/usePolling";
 import {
   Sparkles,
   Users,
@@ -59,24 +60,17 @@ export function MyDayCard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let aborted = false;
-    async function load() {
-      try {
-        const res = await fetch("/api/stats/my-day", { cache: "no-store" });
-        const body = await res.json();
-        if (!aborted && body?.success) setStats(body.data as Stats);
-      } finally {
-        if (!aborted) setLoading(false);
-      }
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch("/api/stats/my-day", { cache: "no-store" });
+      const body = await res.json();
+      if (body?.success) setStats(body.data as Stats);
+    } finally {
+      setLoading(false);
     }
-    load();
-    const i = setInterval(load, 30000);
-    return () => {
-      aborted = true;
-      clearInterval(i);
-    };
   }, []);
+
+  usePolling(load, 30000);
 
   if (loading) {
     return (

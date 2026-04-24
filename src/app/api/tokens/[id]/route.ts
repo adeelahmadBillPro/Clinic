@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
 import { updateTokenSchema } from "@/lib/validations/token";
 import { sendWhatsApp, tokenCalledMessage } from "@/lib/twilio";
+import { runAfterResponse } from "@/lib/background";
+import { getIp } from "@/lib/utils";
 
 export async function PATCH(
   req: Request,
@@ -35,6 +37,27 @@ export async function PATCH(
     return NextResponse.json(
       { success: false, error: "Token not found" },
       { status: 404 },
+    );
+  }
+
+  // Explicit transition matrix. Previously any status write would land
+  // (including going back from COMPLETED to WAITING), which corrupted
+  // queue metrics and audit trails.
+  const VALID_TRANSITIONS: Record<string, string[]> = {
+    WAITING: ["CALLED", "CANCELLED", "EXPIRED"],
+    CALLED: ["IN_PROGRESS", "WAITING", "CANCELLED"],
+    IN_PROGRESS: ["COMPLETED", "CANCELLED"],
+    COMPLETED: [],
+    CANCELLED: [],
+    EXPIRED: [],
+  };
+  if (status && !VALID_TRANSITIONS[token.status]?.includes(status)) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `Cannot go from ${token.status} to ${status}`,
+      },
+      { status: 409 },
     );
   }
 
@@ -78,6 +101,7 @@ export async function PATCH(
       clinicId: session.user.clinicId,
       userId: session.user.id,
       userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
       action:
         status === "CALLED"
           ? "TOKEN_CALLED"
@@ -92,25 +116,28 @@ export async function PATCH(
     },
   });
 
-  // Send WhatsApp notification on CALLED
+  // Send WhatsApp notification on CALLED. `after()` keeps the work alive
+  // on serverless platforms (Vercel/Lambda kill fire-and-forget IIFEs as
+  // soon as the response is sent).
   if (status === "CALLED") {
-    // Don't block the response on notification send
-    (async () => {
-      try {
+    const clinicId = session.user.clinicId;
+    runAfterResponse(async () => {
         const [patient, doctor, clinic] = await Promise.all([
           t.patient.findUnique({
             where: { id: updated.patientId },
-            select: { phone: true },
+            select: { phone: true, optOutWhatsApp: true },
           }),
           t.doctor.findUnique({
             where: { id: updated.doctorId },
           }),
           prisma.clinic.findUnique({
-            where: { id: session.user.clinicId! },
+            where: { id: clinicId },
             select: { name: true },
           }),
         ]);
-        if (patient?.phone && doctor && clinic) {
+        // Respect WhatsApp opt-out — if the patient said STOP we simply
+        // don't notify. Status is still updated so the display board works.
+        if (patient?.phone && !patient.optOutWhatsApp && doctor && clinic) {
           const doctorUser = await prisma.user.findUnique({
             where: { id: doctor.userId },
             select: { name: true },
@@ -124,7 +151,7 @@ export async function PATCH(
           await sendWhatsApp(patient.phone, msg);
           await t.notification.create({
             data: {
-              clinicId: session.user.clinicId!,
+              clinicId,
               patientId: updated.patientId,
               type: "TOKEN_CALLED",
               channel: "WHATSAPP",
@@ -134,10 +161,7 @@ export async function PATCH(
             },
           });
         }
-      } catch (e) {
-        console.error("[token-called notify] failed", e);
-      }
-    })();
+      });
   }
 
   revalidatePath("/reception");

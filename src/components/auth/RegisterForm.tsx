@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, useAnimationControls } from "framer-motion";
@@ -43,6 +44,7 @@ export function RegisterForm() {
       phone: "",
       password: "",
       confirmPassword: "",
+      acceptTerms: false,
     },
   });
 
@@ -299,13 +301,50 @@ export function RegisterForm() {
           )}
         </motion.div>
 
+        <motion.div variants={stackItem} className="pt-1">
+          {/* P4-51: hard-required T&C acceptance — the server also rejects
+              submissions without it, this is the first line of defence. */}
+          <label className="flex cursor-pointer items-start gap-2.5">
+            <input
+              type="checkbox"
+              {...register("acceptTerms")}
+              className="mt-0.5 h-4 w-4 cursor-pointer rounded border-input accent-primary"
+            />
+            <span className="text-xs text-muted-foreground leading-relaxed">
+              I accept the{" "}
+              <Link
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Terms
+              </Link>{" "}
+              and{" "}
+              <Link
+                href="/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Privacy Policy
+              </Link>
+              .
+            </span>
+          </label>
+          {errors.acceptTerms && (
+            <p className="mt-1 text-xs text-destructive">
+              {errors.acceptTerms.message}
+            </p>
+          )}
+        </motion.div>
+
         <motion.div variants={stackItem} className="pt-2">
           <SubmitButton loading={submitting} loadingText="Creating your workspace...">
             Start free trial
           </SubmitButton>
           <p className="mt-3 text-center text-xs text-muted-foreground">
-            By signing up you agree to our Terms & Privacy. No credit card
-            required.
+            No credit card required.
           </p>
         </motion.div>
       </motion.div>

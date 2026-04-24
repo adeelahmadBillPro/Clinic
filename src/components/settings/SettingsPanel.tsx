@@ -183,7 +183,7 @@ export function SettingsPanel({
                 <a
                   href={`/book/${clinic.slug}`}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="ml-auto text-xs font-medium text-primary hover:underline"
                 >
                   open →

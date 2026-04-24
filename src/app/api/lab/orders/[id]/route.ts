@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
 
 const statusSchema = z.object({
   status: z.enum([
@@ -31,7 +32,15 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const session = await auth();
+  // Updating lab status / results — lab staff + doctor + admins.
+  const gate = await requireApiRole([
+    "OWNER",
+    "ADMIN",
+    "DOCTOR",
+    "LAB_TECH",
+  ]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },

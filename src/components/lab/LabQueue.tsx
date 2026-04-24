@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, RefreshCcw, Plus, FileText } from "lucide-react";
+import { Loader2, RefreshCcw, Plus } from "lucide-react";
 import {
   Tabs,
   TabsContent,
@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { usePolling } from "@/lib/hooks/usePolling";
 import { NewLabOrderDialog } from "./NewLabOrderDialog";
 import { LabResultDialog } from "./LabResultDialog";
 
@@ -49,12 +50,7 @@ export function LabQueue() {
     }
   }, [tab]);
 
-  useEffect(() => {
-    setLoading(true);
-    load();
-    const i = setInterval(load, 12000);
-    return () => clearInterval(i);
-  }, [load]);
+  usePolling(load, 12000);
 
   return (
     <>

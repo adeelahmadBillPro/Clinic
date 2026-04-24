@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
+import { requireApiRole } from "@/lib/api-guards";
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Billing portal exposes card / cancel / invoice history — OWNER only.
+  const gate = await requireApiRole(["OWNER"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },

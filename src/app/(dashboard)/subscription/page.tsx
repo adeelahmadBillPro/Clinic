@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
 import { getClinicAccess } from "@/lib/plan";
@@ -13,8 +13,8 @@ export default async function SubscriptionPage({
 }: {
   searchParams: Promise<{ success?: string; cancelled?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(["OWNER"], "/subscription");
 
   const sp = await searchParams;
   const access = await getClinicAccess(session.user.clinicId);

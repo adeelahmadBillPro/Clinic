@@ -52,16 +52,17 @@ export async function GET() {
           }),
           t.bill.findMany({
             where: {
-              billType: "OPD",
               createdAt: { gte: from, lte: to },
-              items: { not: undefined },
+              // Attribute by explicit doctorId — see P3-33. Previously this
+              // used a description substring, which collided across doctors
+              // with overlapping specialization strings.
+              doctorId: doctor.id,
             },
             select: {
               id: true,
               totalAmount: true,
               paidAmount: true,
               balance: true,
-              items: true,
               collectedBy: true,
             },
           }),
@@ -75,18 +76,9 @@ export async function GET() {
           }),
         ]);
 
-      // Filter bills that contain consultations for this doctor by matching
-      // the description prefix "Consultation — Dr. <specialization>"
-      const myBills = billsCollected.filter((b) => {
-        const items = Array.isArray(b.items) ? (b.items as Array<{ description?: string }>) : [];
-        return items.some(
-          (it) =>
-            (it.description ?? "")
-              .toLowerCase()
-              .includes(doctor.specialization.toLowerCase()),
-        );
-      });
-      const totalCollected = myBills.reduce(
+      // Explicit doctorId attribution — no more description-substring
+      // matching (see P3-33).
+      const totalCollected = billsCollected.reduce(
         (sum, b) => sum + Number(b.paidAmount),
         0,
       );

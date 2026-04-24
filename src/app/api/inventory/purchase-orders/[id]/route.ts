@@ -3,6 +3,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
+import { requireApiRole } from "@/lib/api-guards";
+import { getIp } from "@/lib/utils";
 
 const patchSchema = z.object({
   action: z.enum(["cancel"]),
@@ -57,7 +59,10 @@ export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
+  // Cancelling a PO is a pharmacy / admin operation.
+  const gate = await requireApiRole(["OWNER", "ADMIN", "PHARMACIST"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -118,6 +123,7 @@ export async function PATCH(
         clinicId: session.user.clinicId,
         userId: session.user.id,
         userName: session.user.name ?? "User",
+        ipAddress: getIp(req),
         action: "PO_CANCELLED",
         entityType: "PurchaseOrder",
         entityId: id,

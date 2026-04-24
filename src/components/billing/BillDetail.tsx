@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Printer, MessageCircle, BadgeDollarSign, Loader2, Download } from "lucide-react";
-import { downloadPdf } from "@/lib/download-pdf";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -18,8 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { LogoMark } from "@/components/shared/Logo";
-import { whatsappLinkForMessage } from "@/lib/whatsapp";
-import { cn } from "@/lib/utils";
+import { whatsappLinkForPhone } from "@/lib/whatsapp";
 
 type BillItem = {
   description: string;
@@ -92,13 +90,22 @@ export function BillDetail({
 
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   async function doDownload() {
-    if (!ref.current) return;
+    // PDF is rendered server-side via @react-pdf/renderer — see
+    // /api/bills/[id]/pdf. Keeps fonts / layout consistent across
+    // devices and avoids shipping html2pdf + html2canvas to every client.
     setDownloadingPdf(true);
     try {
-      await downloadPdf(
-        ref.current,
-        `${bill.billNumber}-${bill.billType.toLowerCase()}`,
-      );
+      const res = await fetch(`/api/bills/${bill.id}/pdf`);
+      if (!res.ok) throw new Error("bad status");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${bill.billNumber}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
       toast.success("Bill PDF downloaded");
     } catch {
       toast.error("Could not generate PDF");
@@ -133,21 +140,33 @@ export function BillDetail({
     }
   }
 
-  const waMessage =
-    patient &&
-    clinic &&
-    whatsappLinkForMessage(
-      patient.phone,
-      [
-        `${clinic.name} — Bill ${bill.billNumber}`,
-        ``,
-        `Total: ₨ ${Math.round(bill.totalAmount).toLocaleString()}`,
-        `Paid:  ₨ ${Math.round(bill.paidAmount).toLocaleString()}`,
-        `Balance: ₨ ${Math.round(bill.balance).toLocaleString()}`,
-        ``,
-        `Thank you!`,
-      ].join("\n"),
-    );
+  // P3-45: bill totals are PHI. Keep them on the clipboard; the wa.me
+  // link carries only the phone number.
+  const waUrl =
+    patient && clinic ? whatsappLinkForPhone(patient.phone) : null;
+  const waMessageText =
+    patient && clinic
+      ? [
+          `${clinic.name} — Bill ${bill.billNumber}`,
+          ``,
+          `Total: ₨ ${Math.round(bill.totalAmount).toLocaleString()}`,
+          `Paid:  ₨ ${Math.round(bill.paidAmount).toLocaleString()}`,
+          `Balance: ₨ ${Math.round(bill.balance).toLocaleString()}`,
+          ``,
+          `Thank you!`,
+        ].join("\n")
+      : "";
+  async function handleWhatsAppClick(
+    e: React.MouseEvent<HTMLAnchorElement>,
+  ) {
+    try {
+      await navigator.clipboard.writeText(waMessageText);
+      toast.success("Message copied. Paste it into WhatsApp.");
+    } catch {
+      e.preventDefault();
+      toast.error("Couldn't copy to clipboard.");
+    }
+  }
 
   return (
     <motion.div
@@ -187,15 +206,16 @@ export function BillDetail({
               </>
             )}
           </Button>
-          {waMessage && (
+          {waUrl && (
             <a
-              href={waMessage}
+              href={waUrl}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
+              onClick={handleWhatsAppClick}
               className="inline-flex h-8 items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 text-xs font-medium text-white hover:bg-emerald-700"
             >
               <MessageCircle className="h-3.5 w-3.5" />
-              WhatsApp
+              Copy + WhatsApp
             </a>
           )}
           {bill.balance > 0 && (

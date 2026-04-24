@@ -5,6 +5,23 @@ import type Stripe from "stripe";
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+// In Stripe SDK 22+ (API 2024-10+), `current_period_end` was removed from
+// the Subscription root and lives on SubscriptionItem. Reading it off
+// sub directly returns undefined; the previous `?? now()` fallback was
+// silently expiring every paying clinic on each invoice event. Throws
+// on a missing value — a missing value means a real bug.
+function subPeriodEndDate(sub: Stripe.Subscription): Date {
+  const item = sub.items?.data?.[0];
+  const epoch = (item as unknown as { current_period_end?: number } | undefined)
+    ?.current_period_end;
+  if (!epoch || typeof epoch !== "number") {
+    throw new Error(
+      `Stripe subscription ${sub.id} missing items[0].current_period_end`,
+    );
+  }
+  return new Date(epoch * 1000);
+}
+
 export async function POST(req: Request) {
   if (!stripe) {
     return NextResponse.json(
@@ -16,14 +33,26 @@ export async function POST(req: Request) {
   const signature = req.headers.get("stripe-signature");
   const raw = await req.text();
 
+  // Hard-fail when the secret or signature header is missing. The
+  // previous dev fallback (JSON.parse on unsigned body) meant anyone
+  // could POST a forged event and mutate subscription state.
+  if (!webhookSecret) {
+    console.error("[stripe webhook] STRIPE_WEBHOOK_SECRET is not set");
+    return NextResponse.json(
+      { success: false, error: "Webhook not configured" },
+      { status: 400 },
+    );
+  }
+  if (!signature) {
+    return NextResponse.json(
+      { success: false, error: "Missing signature" },
+      { status: 400 },
+    );
+  }
+
   let event: Stripe.Event;
   try {
-    if (webhookSecret && signature) {
-      event = stripe.webhooks.constructEvent(raw, signature, webhookSecret);
-    } else {
-      // Dev fallback — accept without signature verification
-      event = JSON.parse(raw) as Stripe.Event;
-    }
+    event = stripe.webhooks.constructEvent(raw, signature, webhookSecret);
   } catch (err) {
     console.error("[stripe webhook] signature verify failed", err);
     return NextResponse.json(
@@ -53,7 +82,7 @@ export async function POST(req: Request) {
             update: {
               stripeSubscriptionId: sub.id,
               status: sub.status,
-              currentPeriodEnd: new Date(((sub as unknown as { current_period_end: number }).current_period_end ?? Math.floor(Date.now() / 1000)) * 1000),
+              currentPeriodEnd: subPeriodEndDate(sub),
               cancelAtPeriodEnd: sub.cancel_at_period_end,
               ...(plan ? { planId: plan.id } : {}),
             },
@@ -65,7 +94,7 @@ export async function POST(req: Request) {
                 (await prisma.plan.findFirst({ where: { name: "PRO" } }))?.id ??
                 "",
               status: sub.status,
-              currentPeriodEnd: new Date(((sub as unknown as { current_period_end: number }).current_period_end ?? Math.floor(Date.now() / 1000)) * 1000),
+              currentPeriodEnd: subPeriodEndDate(sub),
               cancelAtPeriodEnd: sub.cancel_at_period_end,
             },
           });
@@ -90,7 +119,7 @@ export async function POST(req: Request) {
             update: {
               stripeSubscriptionId: sub.id,
               status: sub.status,
-              currentPeriodEnd: new Date(((sub as unknown as { current_period_end: number }).current_period_end ?? Math.floor(Date.now() / 1000)) * 1000),
+              currentPeriodEnd: subPeriodEndDate(sub),
               cancelAtPeriodEnd: sub.cancel_at_period_end,
             },
             create: {
@@ -98,7 +127,7 @@ export async function POST(req: Request) {
               stripeSubscriptionId: sub.id,
               planId: clinic.planId,
               status: sub.status,
-              currentPeriodEnd: new Date(((sub as unknown as { current_period_end: number }).current_period_end ?? Math.floor(Date.now() / 1000)) * 1000),
+              currentPeriodEnd: subPeriodEndDate(sub),
               cancelAtPeriodEnd: sub.cancel_at_period_end,
             },
           });

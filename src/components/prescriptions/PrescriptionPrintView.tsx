@@ -4,7 +4,6 @@ import { Printer, Share2, Copy, CheckCircle2, Download, Loader2 } from "lucide-r
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { downloadPdf } from "@/lib/download-pdf";
 
 type Medicine = {
   name: string;
@@ -76,13 +75,26 @@ export function PrescriptionPrintView(props: Props) {
   const sheetRef = useRef<HTMLDivElement>(null);
 
   async function download() {
-    if (!sheetRef.current) return;
+    // Server-side render via /api/prescriptions/[id]/pdf — see BillDetail
+    // for the rationale on moving off client-side html2pdf.
     setDownloading(true);
     try {
-      const filename = `Rx-${props.patient.mrn}-${new Date(props.rx.createdAt)
+      const res = await fetch(`/api/prescriptions/${props.rx.id}/pdf`);
+      if (!res.ok) throw new Error("bad status");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const filename = `Rx-${props.patient.mrn}-${new Date(
+        props.rx.createdAt,
+      )
         .toISOString()
-        .slice(0, 10)}`;
-      await downloadPdf(sheetRef.current, filename);
+        .slice(0, 10)}.pdf`;
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
       toast.success("Prescription PDF downloaded");
     } catch {
       toast.error("Could not generate PDF");

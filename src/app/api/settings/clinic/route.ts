@@ -2,7 +2,31 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/permissions";
+import { db } from "@/lib/tenant-db";
+import { getIp } from "@/lib/utils";
 import { z } from "zod";
+
+// Reject bogus IANA timezone strings — a typo like "Asia/Karach" would
+// silently propagate into slots / tokens / billing date arithmetic.
+const timezoneSchema = z
+  .string()
+  .refine(
+    (tz) => {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    { message: "Unknown timezone" },
+  );
+
+// HH:MM 00:00–23:59. Token reset time drives the daily counter rollover,
+// so unchecked input like "24:01" would break queue ordering.
+const timeOfDaySchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use HH:MM (24-hour)");
 
 const schema = z.object({
   name: z.string().trim().min(2).max(200).optional(),
@@ -10,9 +34,9 @@ const schema = z.object({
   address: z.string().optional(),
   settings: z
     .object({
-      timezone: z.string().optional(),
+      timezone: timezoneSchema.optional(),
       language: z.enum(["en", "ur"]).optional(),
-      tokenResetTime: z.string().optional(),
+      tokenResetTime: timeOfDaySchema.optional(),
       currency: z.string().optional(),
     })
     .optional(),
@@ -67,6 +91,26 @@ export async function PATCH(req: Request) {
       phone: parsed.data.phone ?? current.phone,
       address: parsed.data.address ?? current.address,
       ...(mergedSettings ? { settings: mergedSettings } : {}),
+    },
+  });
+
+  // Audit log — settings changes affect how the whole clinic behaves, so
+  // we want a trail of who flipped what.
+  await db(session.user.clinicId).auditLog.create({
+    data: {
+      clinicId: session.user.clinicId,
+      userId: session.user.id,
+      userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
+      action: "CLINIC_SETTINGS_UPDATED",
+      entityType: "Clinic",
+      entityId: current.id,
+      details: {
+        fields: Object.keys(parsed.data),
+        settingsKeys: parsed.data.settings
+          ? Object.keys(parsed.data.settings)
+          : [],
+      },
     },
   });
 

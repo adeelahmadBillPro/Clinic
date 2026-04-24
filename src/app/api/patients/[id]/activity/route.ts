@@ -23,8 +23,13 @@ type ActivityEntry = {
   reference?: string;
 };
 
+// Roles that see clinical detail. For reception / pharmacy / lab we redact
+// consultations, prescriptions, vitals, labOrders so a receptionist
+// pulling a patient's activity stream doesn't end up reading clinical PHI.
+const CLINICAL_ROLES = new Set(["OWNER", "ADMIN", "DOCTOR", "NURSE"]);
+
 export async function GET(
-  _req: Request,
+  req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
   const session = await auth();
@@ -37,6 +42,21 @@ export async function GET(
   const { id } = await ctx.params;
   const t = db(session.user.clinicId);
 
+  // Cursor pagination: `before=<iso>` + `limit` (default 50, cap 200).
+  // Without this the handler loaded every token / bill / consultation
+  // ever written for the patient into memory, which OOMs on long-lived
+  // patients and makes the UI unusable.
+  const url = new URL(req.url);
+  const limit = Math.min(
+    200,
+    Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50),
+  );
+  const before = url.searchParams.get("before");
+  const beforeDate =
+    before && !isNaN(Date.parse(before)) ? new Date(before) : null;
+
+  const canSeeClinical = CLINICAL_ROLES.has(session.user.role);
+
   const patient = await t.patient.findUnique({
     where: { id },
     select: { id: true, name: true, mrn: true, createdAt: true },
@@ -48,51 +68,76 @@ export async function GET(
     );
   }
 
-  const [tokens, consultations, prescriptions, bills, appointments, audits, pharmOrders, labOrders, admissions] =
-    await Promise.all([
-      t.token.findMany({
-        where: { patientId: id },
-        orderBy: { issuedAt: "desc" },
-      }),
-      t.consultation.findMany({
-        where: { patientId: id },
-        orderBy: { createdAt: "desc" },
-      }),
-      t.prescription.findMany({
-        where: { patientId: id },
-        orderBy: { createdAt: "desc" },
-      }),
-      t.bill.findMany({
-        where: { patientId: id },
-        orderBy: { createdAt: "desc" },
-      }),
-      t.appointment.findMany({
-        where: { patientId: id },
-        orderBy: { createdAt: "desc" },
-      }),
-      t.auditLog.findMany({
-        where: {
-          OR: [
-            { entityType: "Patient", entityId: id },
-            { entityType: "Token", entityId: { in: [] } }, // filled below
-          ],
-        },
-        orderBy: { createdAt: "desc" },
-        take: 200,
-      }),
-      t.pharmacyOrder.findMany({
-        where: { patientId: id },
-        orderBy: { createdAt: "desc" },
-      }),
-      t.labOrder.findMany({
-        where: { patientId: id },
-        orderBy: { createdAt: "desc" },
-      }),
-      t.ipdAdmission.findMany({
-        where: { patientId: id },
-        orderBy: { admissionDate: "desc" },
-      }),
-    ]);
+  // Each source table slices to `limit` rows capped by `before`. Without
+  // the bound we'd happily fetch years of tokens.
+  const beforeFilter = beforeDate ? { lt: beforeDate } : undefined;
+  const [
+    tokens,
+    consultations,
+    prescriptions,
+    bills,
+    appointments,
+    audits,
+    pharmOrders,
+    labOrders,
+    admissions,
+  ] = await Promise.all([
+    t.token.findMany({
+      where: { patientId: id, ...(beforeFilter ? { issuedAt: beforeFilter } : {}) },
+      orderBy: { issuedAt: "desc" },
+      take: limit,
+    }),
+    canSeeClinical
+      ? t.consultation.findMany({
+          where: { patientId: id, ...(beforeFilter ? { createdAt: beforeFilter } : {}) },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+        })
+      : Promise.resolve([] as Awaited<ReturnType<typeof t.consultation.findMany>>),
+    canSeeClinical
+      ? t.prescription.findMany({
+          where: { patientId: id, ...(beforeFilter ? { createdAt: beforeFilter } : {}) },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+        })
+      : Promise.resolve([] as Awaited<ReturnType<typeof t.prescription.findMany>>),
+    t.bill.findMany({
+      where: { patientId: id, ...(beforeFilter ? { createdAt: beforeFilter } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+    t.appointment.findMany({
+      where: { patientId: id, ...(beforeFilter ? { createdAt: beforeFilter } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+    t.auditLog.findMany({
+      where: {
+        entityType: "Patient",
+        entityId: id,
+        ...(beforeFilter ? { createdAt: beforeFilter } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+    t.pharmacyOrder.findMany({
+      where: { patientId: id, ...(beforeFilter ? { createdAt: beforeFilter } : {}) },
+      orderBy: { createdAt: "desc" },
+      take: limit,
+    }),
+    canSeeClinical
+      ? t.labOrder.findMany({
+          where: { patientId: id, ...(beforeFilter ? { createdAt: beforeFilter } : {}) },
+          orderBy: { createdAt: "desc" },
+          take: limit,
+        })
+      : Promise.resolve([] as Awaited<ReturnType<typeof t.labOrder.findMany>>),
+    t.ipdAdmission.findMany({
+      where: { patientId: id, ...(beforeFilter ? { admissionDate: beforeFilter } : {}) },
+      orderBy: { admissionDate: "desc" },
+      take: limit,
+    }),
+  ]);
 
   // Pull user names for the ids we'll need
   const userIds = new Set<string>();
@@ -244,10 +289,13 @@ export async function GET(
     if (a.entityType === "Patient" && a.action === "PATIENT_REGISTERED") continue;
     entries.push({
       time: a.createdAt.toISOString(),
+      // Title-case the audit action tag. Empty segments (e.g. actions with
+      // leading / double underscores) used to crash here when `w[0]` was
+      // undefined — guard with `?? ""`.
       action: a.action
         .toLowerCase()
         .split("_")
-        .map((w) => w[0].toUpperCase() + w.slice(1))
+        .map((w) => (w[0]?.toUpperCase() ?? "") + w.slice(1))
         .join(" "),
       by: userName(a.userId),
       summary:
@@ -260,12 +308,17 @@ export async function GET(
   }
 
   entries.sort((a, b) => (b.time > a.time ? 1 : -1));
+  const paged = entries.slice(0, limit);
+  const nextBefore =
+    entries.length > limit ? paged[paged.length - 1]?.time : null;
 
   return NextResponse.json({
     success: true,
     data: {
       patient: { id: patient.id, name: patient.name, mrn: patient.mrn },
-      entries,
+      entries: paged,
+      phi: canSeeClinical,
+      nextBefore,
     },
   });
 }

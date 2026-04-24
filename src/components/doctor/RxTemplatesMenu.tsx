@@ -6,7 +6,6 @@ import {
   Bookmark,
   Trash2,
   Loader2,
-  X,
   Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -37,47 +36,52 @@ type RxTemplate = {
   createdAt: string;
 };
 
-const LS_KEY_PREFIX = "clinicos-rx-templates-";
-
-function loadTemplates(userId: string): RxTemplate[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(LS_KEY_PREFIX + userId);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed;
-  } catch {
-    return [];
-  }
-}
-
-function saveTemplates(userId: string, templates: RxTemplate[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(LS_KEY_PREFIX + userId, JSON.stringify(templates));
-}
-
-export function RxTemplatesMenu({
-  userId,
-  currentItems,
-  onApply,
-}: {
+/**
+ * RxTemplatesMenu — prescription templates per doctor.
+ *
+ * Previously backed by localStorage, which meant templates vanished on
+ * device change and leaked across users sharing a machine. Templates now
+ * live in the DB at `/api/prescriptions/templates`, scoped by (clinicId,
+ * userId). The userId prop is no longer needed to key storage but is
+ * kept for API compatibility.
+ */
+// userId arg kept for API compatibility with existing callers; server
+// scopes templates to the authenticated user so we no longer key storage
+// by it client-side.
+export function RxTemplatesMenu(_props: {
   userId: string;
   currentItems: MedicineItem[];
   onApply: (items: MedicineItem[]) => void;
 }) {
+  const { currentItems, onApply } = _props;
   const [templates, setTemplates] = useState<RxTemplate[]>([]);
   const [saveOpen, setSaveOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [saving, setSaving] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setTemplates(loadTemplates(userId));
-    setMounted(true);
-  }, [userId]);
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/prescriptions/templates", {
+          cache: "no-store",
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!active) return;
+        if (res.ok && body?.success && Array.isArray(body.data)) {
+          setTemplates(body.data as RxTemplate[]);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  function save() {
+  async function save() {
     const name = templateName.trim();
     if (!name) {
       toast.error("Give the template a name");
@@ -87,23 +91,27 @@ export function RxTemplatesMenu({
       toast.error("Add at least one medicine first");
       return;
     }
-    if (templates.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
-      toast.error("A template with this name already exists");
-      return;
-    }
     setSaving(true);
     try {
-      const next: RxTemplate[] = [
-        ...templates,
-        {
-          id: `tpl_${Date.now().toString(36)}`,
-          name,
-          items: currentItems,
-          createdAt: new Date().toISOString(),
-        },
-      ];
-      saveTemplates(userId, next);
-      setTemplates(next);
+      const res = await fetch("/api/prescriptions/templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name, items: currentItems }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.success) {
+        toast.error(body?.error ?? "Couldn't save template");
+        return;
+      }
+      // Refetch rather than splicing client-side so list stays in sync
+      // with the DB (especially if a second tab raced us).
+      const refetch = await fetch("/api/prescriptions/templates", {
+        cache: "no-store",
+      });
+      const list = await refetch.json().catch(() => ({}));
+      if (refetch.ok && list?.success && Array.isArray(list.data)) {
+        setTemplates(list.data as RxTemplate[]);
+      }
       setSaveOpen(false);
       setTemplateName("");
       toast.success(`Template "${name}" saved`);
@@ -117,18 +125,21 @@ export function RxTemplatesMenu({
     toast.success(`Applied "${tpl.name}" — ${tpl.items.length} medicines`);
   }
 
-  function remove(id: string) {
+  async function remove(id: string) {
     const tpl = templates.find((t) => t.id === id);
     if (!tpl) return;
     const ok = confirm(`Delete template "${tpl.name}"?`);
     if (!ok) return;
-    const next = templates.filter((t) => t.id !== id);
-    saveTemplates(userId, next);
-    setTemplates(next);
+    const res = await fetch(`/api/prescriptions/templates/${id}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      toast.error("Couldn't delete template");
+      return;
+    }
+    setTemplates((list) => list.filter((t) => t.id !== id));
     toast.success("Template deleted");
   }
-
-  if (!mounted) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -154,10 +165,15 @@ export function RxTemplatesMenu({
           <div className="border-b px-3.5 py-2.5">
             <div className="text-sm font-semibold">Saved templates</div>
             <div className="text-[10px] text-muted-foreground">
-              Click to append. Right-click to delete.
+              Click to append. Hover row to delete.
             </div>
           </div>
-          {templates.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center gap-1.5 p-6 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading…
+            </div>
+          ) : templates.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-1.5 p-6 text-center">
               <Sparkles className="h-5 w-5 text-muted-foreground" />
               <div className="text-xs text-muted-foreground">
@@ -165,6 +181,10 @@ export function RxTemplatesMenu({
               </div>
               <div className="text-[11px] text-muted-foreground">
                 Write a prescription then click &ldquo;Save as template&rdquo;.
+              </div>
+              <div className="mt-1 text-[10px] text-muted-foreground">
+                (Old localStorage templates don&rsquo;t migrate — save your
+                frequent ones again here.)
               </div>
             </div>
           ) : (

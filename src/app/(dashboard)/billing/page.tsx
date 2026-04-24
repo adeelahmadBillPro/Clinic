@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { BillingList } from "@/components/billing/BillingList";
 import { buttonVariants } from "@/components/ui/button";
@@ -11,8 +10,11 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Billing — ClinicOS" };
 
 export default async function BillingPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST"],
+    "/billing",
+  );
 
   const t = db(session.user.clinicId);
   const today = new Date();

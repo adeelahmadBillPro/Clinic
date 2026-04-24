@@ -12,7 +12,6 @@ import { AlertCircle } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
 import { PasswordInput } from "@/components/shared/PasswordInput";
 import { SubmitButton } from "@/components/shared/SubmitButton";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
@@ -30,10 +29,21 @@ function friendlyAuthError(code?: string, raw?: string) {
   return "Invalid email or password";
 }
 
+// Only allow callbackUrl values that are same-origin relative paths. Reject
+// scheme-relative ("//evil.com"), absolute URLs, and back-references — an
+// attacker linking the login page with `?callbackUrl=https://evil.com` could
+// otherwise bounce a freshly signed-in user off to a phishing clone.
+function safeCallbackUrl(raw: string | null): string {
+  if (!raw) return "/dashboard";
+  if (!raw.startsWith("/")) return "/dashboard";
+  if (raw.startsWith("//") || raw.startsWith("/\\")) return "/dashboard";
+  return raw;
+}
+
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const callbackUrl = safeCallbackUrl(searchParams.get("callbackUrl"));
   const shake = useAnimationControls();
 
   const [submitting, setSubmitting] = useState(false);
@@ -46,7 +56,9 @@ export function LoginForm() {
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
     mode: "onBlur",
-    defaultValues: { email: "", password: "", rememberMe: false as boolean | undefined },
+    // P4-50: rememberMe dropped — it was collected but never passed to
+    // signIn. Bring it back once session-duration logic actually wires up.
+    defaultValues: { email: "", password: "" },
   });
 
   async function onSubmit(values: LoginInput) {
@@ -153,18 +165,6 @@ export function LoginForm() {
           )}
         </motion.div>
 
-        <motion.div
-          variants={stackItem}
-          className="flex items-center gap-2.5 pt-1"
-        >
-          <Checkbox id="rememberMe" {...register("rememberMe")} />
-          <Label
-            htmlFor="rememberMe"
-            className="text-sm font-normal text-muted-foreground cursor-pointer"
-          >
-            Keep me signed in on this device
-          </Label>
-        </motion.div>
 
         <motion.div variants={stackItem} className="pt-2">
           <SubmitButton loading={submitting} loadingText="Signing you in...">

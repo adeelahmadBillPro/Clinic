@@ -1,9 +1,18 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
+import { requireApiRole } from "@/lib/api-guards";
+import { getIp } from "@/lib/utils";
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Opening a cash shift — staff who handle cash.
+  const gate = await requireApiRole([
+    "OWNER",
+    "ADMIN",
+    "RECEPTIONIST",
+    "PHARMACIST",
+  ]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -47,6 +56,7 @@ export async function POST(req: Request) {
       clinicId: session.user.clinicId,
       userId: session.user.id,
       userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
       action: "CASH_SHIFT_OPENED",
       entityType: "CashShift",
       entityId: shift.id,

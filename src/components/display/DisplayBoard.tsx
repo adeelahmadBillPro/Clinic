@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Stethoscope, Clock, Volume2, VolumeX, Maximize2 } from "lucide-react";
+import { usePolling } from "@/lib/hooks/usePolling";
 
 type DoctorLane = {
   doctorId: string;
@@ -38,52 +39,44 @@ export function DisplayBoard({ slug }: { slug: string }) {
   }, []);
 
   // Fetch loop
-  useEffect(() => {
-    let aborted = false;
-    async function load() {
-      try {
-        const res = await fetch(`/api/display/${slug}`, { cache: "no-store" });
-        const body = await res.json();
-        if (aborted) return;
-        if (body?.success) {
-          // Detect new CALLED tokens to play chime
-          const next = body.data as Board;
-          if (data) {
-            for (const lane of next.board) {
-              const prev = lastCalledRef.current.get(lane.doctorId);
-              const now = lane.current?.displayToken;
-              if (now && now !== prev && lane.current?.status === "CALLED") {
-                lastCalledRef.current.set(lane.doctorId, now);
-                if (soundOn) chime();
-              } else if (now) {
-                lastCalledRef.current.set(lane.doctorId, now);
-              }
-            }
-          } else {
-            // First load — seed the ref map without chime
-            for (const lane of next.board) {
-              if (lane.current?.displayToken) {
-                lastCalledRef.current.set(
-                  lane.doctorId,
-                  lane.current.displayToken,
-                );
-              }
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/display/${slug}`, { cache: "no-store" });
+      const body = await res.json();
+      if (body?.success) {
+        // Detect new CALLED tokens to play chime
+        const next = body.data as Board;
+        if (data) {
+          for (const lane of next.board) {
+            const prev = lastCalledRef.current.get(lane.doctorId);
+            const now = lane.current?.displayToken;
+            if (now && now !== prev && lane.current?.status === "CALLED") {
+              lastCalledRef.current.set(lane.doctorId, now);
+              if (soundOn) chime();
+            } else if (now) {
+              lastCalledRef.current.set(lane.doctorId, now);
             }
           }
-          setData(next);
+        } else {
+          // First load — seed the ref map without chime
+          for (const lane of next.board) {
+            if (lane.current?.displayToken) {
+              lastCalledRef.current.set(
+                lane.doctorId,
+                lane.current.displayToken,
+              );
+            }
+          }
         }
-      } catch {
-        // ignore
+        setData(next);
       }
+    } catch {
+      // ignore
     }
-    load();
-    const i = setInterval(load, 4000);
-    return () => {
-      aborted = true;
-      clearInterval(i);
-    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slug, soundOn]);
+  }, [slug, soundOn, data]);
+
+  usePolling(load, 4000);
 
   function chime() {
     try {

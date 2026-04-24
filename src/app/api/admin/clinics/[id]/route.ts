@@ -95,7 +95,24 @@ export async function DELETE(
     );
   }
 
-  // Cascade delete every tenant-scoped record for this clinic
+  // After P2-16 every tenant model has `clinic @relation(... onDelete: Cascade)`
+  // so deleting the clinic wipes all dependent rows at the DB layer — the
+  // long hand-rolled cascade below is no longer needed.
+  //
+  // Users still need an explicit delete because we intentionally do NOT
+  // cascade User.clinicId (SUPER_ADMIN has no clinicId, and we don't want
+  // an orphaned clinic to nuke platform-level accounts).
+  //
+  // Old manual cascade retained commented out for two weeks as a safety
+  // net — remove after 2026-05-07 if the FK migration held.
+  await prisma.$transaction(async (tx) => {
+    await tx.user.deleteMany({ where: { clinicId: id } });
+    await tx.clinic.delete({ where: { id } });
+  });
+
+  /*
+  // Previous manual cascade — DO NOT uncomment without first confirming
+  // the FK migration (manual-20260423-fk-relations) is NOT applied.
   await prisma.$transaction(async (tx) => {
     const w = { clinicId: id };
     await tx.stockMovement.deleteMany({ where: w });
@@ -124,6 +141,7 @@ export async function DELETE(
     await tx.user.deleteMany({ where: { clinicId: id } });
     await tx.clinic.delete({ where: { id } });
   });
+  */
 
   return NextResponse.json({ success: true });
 }

@@ -34,6 +34,10 @@ export const registerSchema = z
       .transform((v) =>
         typeof v === "number" && !isNaN(v) ? v : undefined,
       ),
+    // P4-51: must tick terms & privacy to create an account.
+    acceptTerms: z
+      .boolean()
+      .refine((v) => v === true, "You must accept the Terms to continue"),
   })
   .refine((d) => d.password === d.confirmPassword, {
     message: "Passwords do not match",
@@ -64,7 +68,6 @@ export type RegisterOutput = z.output<typeof registerSchema>;
 export const loginSchema = z.object({
   email: z.string().trim().toLowerCase().email("Enter a valid email"),
   password: z.string().min(1, "Password is required"),
-  rememberMe: z.boolean().optional(),
 });
 
 export type LoginInput = z.infer<typeof loginSchema>;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
+import { requireApiRole } from "@/lib/api-guards";
 
 const bodySchema = z.object({
   shift: z.enum(["MORNING", "EVENING", "NIGHT"]).default("MORNING"),
@@ -51,7 +52,10 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const session = await auth();
+  // Nursing notes are bedside care documentation — nurse/doctor + admins.
+  const gate = await requireApiRole(["OWNER", "ADMIN", "DOCTOR", "NURSE"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },

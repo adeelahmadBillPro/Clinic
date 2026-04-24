@@ -1,18 +1,19 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { InventoryOverview } from "@/components/inventory/InventoryOverview";
 import { buttonVariants } from "@/components/ui/button";
-import { Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Inventory — ClinicOS" };
 
 export default async function InventoryPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "PHARMACIST"],
+    "/inventory",
+  );
 
   const t = db(session.user.clinicId);
   const [medicines, totalCount, expSoon] = await Promise.all([

@@ -48,13 +48,7 @@ const TYPE_COLOR: Record<string, string> = {
   ICU: "bg-destructive/10 text-destructive",
 };
 
-export function IpdOverview({
-  beds,
-  activeAdmissions,
-}: {
-  beds: Bed[];
-  activeAdmissions: number;
-}) {
+export function IpdOverview({ beds }: { beds: Bed[] }) {
   const router = useRouter();
   const [admitBed, setAdmitBed] = useState<Bed | null>(null);
   const [discharge, setDischarge] = useState<Bed | null>(null);

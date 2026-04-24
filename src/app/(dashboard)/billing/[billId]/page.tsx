@@ -1,6 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { BillDetail } from "@/components/billing/BillDetail";
@@ -17,8 +17,11 @@ export default async function BillDetailPage({
 }) {
   const { billId } = await params;
   const sp = await searchParams;
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST"],
+    "/billing/[billId]",
+  );
 
   const t = db(session.user.clinicId);
   const bill = await t.bill.findUnique({ where: { id: billId } });

@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { isAdmin } from "@/lib/permissions";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
 
 const submitSchema = z.object({
   shiftType: z.enum(["MORNING", "EVENING", "NIGHT", "FULL_DAY"]).default("FULL_DAY"),
@@ -42,8 +43,15 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  // Staff submits their end-of-shift cash handover
-  const session = await auth();
+  // End-of-shift handover — staff who actually collect cash.
+  const gate = await requireApiRole([
+    "OWNER",
+    "ADMIN",
+    "RECEPTIONIST",
+    "PHARMACIST",
+  ]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },

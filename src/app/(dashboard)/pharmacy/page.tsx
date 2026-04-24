@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { PharmacyQueue } from "@/components/pharmacy/PharmacyQueue";
 import { MyDayCard } from "@/components/shared/MyDayCard";
 
@@ -7,8 +6,12 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Pharmacy — ClinicOS" };
 
 export default async function PharmacyPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "PHARMACIST"],
+    "/pharmacy",
+  );
+  void session;
   return (
     <div className="space-y-6">
       <div>

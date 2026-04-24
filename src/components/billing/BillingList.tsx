@@ -39,23 +39,34 @@ export function BillingList({ initial }: { initial: BillRow[] }) {
   const [tab, setTab] = useState<"ALL" | "PENDING" | "PARTIAL" | "PAID">("ALL");
   const [q, setQ] = useState("");
   const [rows, setRows] = useState<BillRow[]>(initial);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
 
   useEffect(() => {
+    // AbortController cancels in-flight fetches when the user keeps
+    // typing — otherwise a slow response for an old query could overwrite
+    // the fresh results on screen.
+    const ac = new AbortController();
     const handle = setTimeout(async () => {
       setLoading(true);
       try {
         const params = new URLSearchParams();
         if (tab !== "ALL") params.set("status", tab);
         if (q.trim()) params.set("q", q.trim());
-        const res = await fetch(`/api/billing?${params.toString()}`);
+        const res = await fetch(`/api/billing?${params.toString()}`, {
+          signal: ac.signal,
+        });
         const body = await res.json();
         if (body?.success) setRows(body.data);
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") throw e;
       } finally {
         setLoading(false);
       }
     }, 200);
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      ac.abort();
+    };
   }, [tab, q]);
 
   return (

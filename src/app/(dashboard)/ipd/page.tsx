@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { IpdOverview } from "@/components/ipd/IpdOverview";
 
@@ -7,8 +6,11 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "IPD — ClinicOS" };
 
 export default async function IpdPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "NURSE", "DOCTOR"],
+    "/ipd",
+  );
 
   const t = db(session.user.clinicId);
   const beds = await t.bed.findMany({
@@ -39,11 +41,6 @@ export default async function IpdPage() {
       : null,
   }));
 
-  const admissions = await t.ipdAdmission.findMany({
-    where: { status: "ADMITTED" },
-    orderBy: { admissionDate: "desc" },
-  });
-
   return (
     <div className="space-y-6">
       <div>
@@ -53,10 +50,7 @@ export default async function IpdPage() {
           out.
         </p>
       </div>
-      <IpdOverview
-        beds={initialBeds}
-        activeAdmissions={admissions.length}
-      />
+      <IpdOverview beds={initialBeds} />
     </div>
   );
 }

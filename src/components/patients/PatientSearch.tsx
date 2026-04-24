@@ -41,22 +41,31 @@ export function PatientSearch({
       setOpen(false);
       return;
     }
+    // Cancel in-flight fetches when the user keeps typing — otherwise a
+    // slow reply for "Bas" can clobber the fresh results for "Basim".
+    const ac = new AbortController();
     const handle = setTimeout(async () => {
       setLoading(true);
       try {
         const res = await fetch(
           `/api/patients?q=${encodeURIComponent(q)}&limit=8`,
+          { signal: ac.signal },
         );
         const body = await res.json();
         if (body?.success) {
           setHits(body.data);
           setOpen(true);
         }
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") throw e;
       } finally {
         setLoading(false);
       }
     }, 220);
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      ac.abort();
+    };
   }, [q]);
 
   useEffect(() => {

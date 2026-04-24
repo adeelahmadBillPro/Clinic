@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { createBillSchema } from "@/lib/validations/billing";
+import { requireApiRole } from "@/lib/api-guards";
+import { nextSequence, pad } from "@/lib/counter";
+import { getIp } from "@/lib/utils";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -55,7 +58,16 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Collecting payment mutates revenue records — reception / pharmacist
+  // front-desk + admins for corrections.
+  const gate = await requireApiRole([
+    "OWNER",
+    "ADMIN",
+    "RECEPTIONIST",
+    "PHARMACIST",
+  ]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -95,9 +107,18 @@ export async function POST(req: Request) {
     (sum, i) => sum + i.qty * i.unitPrice,
     0,
   );
-  let totalAmount = subtotal - input.discount;
-  let insuranceInfo: Record<string, unknown> | null = null;
+  // Clamp discount to [0, subtotal] — a client posting discount > subtotal
+  // would drive totalAmount negative; a negative would be treated as a
+  // credit we never intended.
+  const discount = Math.min(Math.max(0, input.discount), subtotal);
+  const totalAmount = subtotal - discount;
 
+  // Insurance info is stored as metadata on the bill. We do NOT subtract
+  // coveredAmount from the patient's balance here — that decision depends
+  // on whether the clinic collects from the patient first (then claims)
+  // or claims first (then bills the patient for the remainder), and
+  // clinics split both ways. The field exists for reporting / reminders.
+  let insuranceInfo: Record<string, unknown> | null = null;
   if (input.paymentMethod === "INSURANCE" && input.insuranceInfo) {
     const coveragePct = input.insuranceInfo.coveragePct ?? 0;
     const coveredAmount = Math.round((totalAmount * coveragePct) / 100);
@@ -105,25 +126,17 @@ export async function POST(req: Request) {
       ...input.insuranceInfo,
       coveredAmount,
       patientPortion: totalAmount - coveredAmount,
+      note: "metadata-only; does not affect balance",
     };
   }
 
   const paidAmount = Math.min(input.paidAmount, totalAmount);
   const balance = totalAmount - paidAmount;
 
-  // Generate bill number
+  // Atomic sequence — see src/lib/counter.ts for why findFirst+desc+1 was unsafe.
   const year = new Date().getFullYear();
-  const last = await t.bill.findFirst({
-    where: { billNumber: { startsWith: `BL-${year}-` } },
-    orderBy: { billNumber: "desc" },
-    select: { billNumber: true },
-  });
-  let nextNum = 1;
-  if (last?.billNumber) {
-    const match = last.billNumber.match(/-(\d+)$/);
-    if (match) nextNum = parseInt(match[1], 10) + 1;
-  }
-  const billNumber = `BL-${year}-${String(nextNum).padStart(4, "0")}`;
+  const seq = await nextSequence(clinicId, "BILL", undefined, year);
+  const billNumber = `BL-${year}-${pad(seq, 4)}`;
 
   const items = input.items.map((i) => ({
     description: i.description,
@@ -147,7 +160,7 @@ export async function POST(req: Request) {
       billType: input.billType,
       items,
       subtotal,
-      discount: input.discount,
+      discount,
       discountReason: input.discountReason ?? null,
       totalAmount,
       paidAmount,
@@ -165,6 +178,7 @@ export async function POST(req: Request) {
       clinicId,
       userId: session.user.id,
       userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
       action: "BILL_GENERATED",
       entityType: "Bill",
       entityId: bill.id,

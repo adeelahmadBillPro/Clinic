@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
+import { nextSequence, pad } from "@/lib/counter";
 
 const itemSchema = z.object({
   medicineId: z.string().optional(),
@@ -52,7 +54,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Creating a PO commits spend — pharmacy staff + admins.
+  const gate = await requireApiRole(["OWNER", "ADMIN", "PHARMACIST"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -71,17 +76,8 @@ export async function POST(req: Request) {
   const t = db(clinicId);
 
   const year = new Date().getFullYear();
-  const last = await t.purchaseOrder.findFirst({
-    where: { poNumber: { startsWith: `PO-${year}-` } },
-    orderBy: { poNumber: "desc" },
-    select: { poNumber: true },
-  });
-  let nextNum = 1;
-  if (last?.poNumber) {
-    const m = last.poNumber.match(/-(\d+)$/);
-    if (m) nextNum = parseInt(m[1], 10) + 1;
-  }
-  const poNumber = `PO-${year}-${String(nextNum).padStart(4, "0")}`;
+  const seq = await nextSequence(clinicId, "PO", undefined, year);
+  const poNumber = `PO-${year}-${pad(seq, 4)}`;
 
   const totalAmount = parsed.data.items.reduce(
     (s, i) => s + i.qty * i.unitPrice,

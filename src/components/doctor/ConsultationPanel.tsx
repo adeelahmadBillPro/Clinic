@@ -10,7 +10,6 @@ import {
   CheckCircle2,
   Loader2,
   Send,
-  X,
   UserCog,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -221,6 +220,7 @@ export function ConsultationPanel({
       medicines,
       prescriptionNotes,
       followUpDate,
+      outstanding,
       onDone,
     ],
   );

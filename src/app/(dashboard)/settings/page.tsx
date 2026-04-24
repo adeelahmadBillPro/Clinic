@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { prisma } from "@/lib/prisma";
-import { isAdmin } from "@/lib/permissions";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
-import { FileDown, ScrollText } from "lucide-react";
+import { ScrollText } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -12,9 +11,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Settings — ClinicOS" };
 
 export default async function SettingsPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
-  if (!isAdmin(session.user.role)) redirect("/dashboard");
+  // P3-44: role gate
+  const session = await requireRole(["OWNER", "ADMIN"], "/settings");
 
   const clinic = await prisma.clinic.findUnique({
     where: { id: session.user.clinicId },

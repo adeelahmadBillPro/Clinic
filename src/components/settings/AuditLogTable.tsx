@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import {
   Table,
@@ -42,19 +42,11 @@ const ACTION_COLORS: Record<string, string> = {
 };
 
 export function AuditLogTable({ initial }: { initial: Entry[] }) {
-  const [entries, setEntries] = useState<Entry[]>(initial);
+  // Pagination + coarse filters now live on the page (server-side — see
+  // P4-59). The client still offers a quick in-page fuzzy filter on the
+  // currently-visible entries.
+  const entries = initial;
   const [q, setQ] = useState("");
-
-  useEffect(() => {
-    const handle = setTimeout(async () => {
-      const res = await fetch(`/api/audit?limit=200`);
-      const body = await res.json();
-      if (body?.success) {
-        setEntries(body.data);
-      }
-    }, 60000);
-    return () => clearTimeout(handle);
-  }, []);
 
   const filtered = q.trim()
     ? entries.filter(

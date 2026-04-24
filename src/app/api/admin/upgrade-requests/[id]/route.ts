@@ -14,6 +14,8 @@ const CYCLE_TO_DAYS: Record<string, number> = {
   oneTime: 365 * 5, // treat one-time as "5 years of access"
 };
 
+class AlreadyReviewedError extends Error {}
+
 export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
@@ -45,8 +47,11 @@ export async function PATCH(
   }
 
   if (parsed.data.action === "reject") {
-    await prisma.upgradeRequest.update({
-      where: { id },
+    // CAS: only flip if still PENDING. Without this a double-click could
+    // stamp the row twice; harmless here but the same pattern is used for
+    // approve below, where it's critical.
+    const flip = await prisma.upgradeRequest.updateMany({
+      where: { id, status: "PENDING" },
       data: {
         status: "REJECTED",
         reviewedBy: session.user.id,
@@ -55,6 +60,12 @@ export async function PATCH(
         reviewNotes: parsed.data.reviewNotes ?? null,
       },
     });
+    if (flip.count === 0) {
+      return NextResponse.json(
+        { success: false, error: "Already reviewed" },
+        { status: 409 },
+      );
+    }
 
     // Notify the clinic owner
     const clinic = await prisma.clinic.findUnique({
@@ -100,49 +111,65 @@ export async function PATCH(
   const newEnd = new Date(base);
   newEnd.setDate(newEnd.getDate() + days);
 
-  await prisma.$transaction(async (tx) => {
-    if (existingSub) {
-      await tx.subscription.update({
-        where: { clinicId: request.clinicId },
+  try {
+    await prisma.$transaction(async (tx) => {
+      // Compare-and-swap the request status FIRST so concurrent approvals
+      // are rejected before we extend the subscription twice. Anything
+      // after this flip only runs in the winning request.
+      const flip = await tx.upgradeRequest.updateMany({
+        where: { id, status: "PENDING" },
         data: {
-          planId: plan.id,
-          status: "ACTIVE",
-          currentPeriodEnd: newEnd,
-          cancelAtPeriodEnd: false,
+          status: "APPROVED",
+          reviewedBy: session.user.id,
+          reviewerName: session.user.name ?? "Admin",
+          reviewedAt: new Date(),
+          reviewNotes: parsed.data.reviewNotes ?? null,
         },
       });
-    } else {
-      await tx.subscription.create({
+      if (flip.count === 0) {
+        throw new AlreadyReviewedError();
+      }
+
+      if (existingSub) {
+        await tx.subscription.update({
+          where: { clinicId: request.clinicId },
+          data: {
+            planId: plan.id,
+            status: "ACTIVE",
+            currentPeriodEnd: newEnd,
+            cancelAtPeriodEnd: false,
+          },
+        });
+      } else {
+        await tx.subscription.create({
+          data: {
+            clinicId: request.clinicId,
+            planId: plan.id,
+            status: "ACTIVE",
+            currentPeriodEnd: newEnd,
+          },
+        });
+      }
+
+      // Activate the clinic and clear the trial
+      await tx.clinic.update({
+        where: { id: request.clinicId },
         data: {
-          clinicId: request.clinicId,
+          isActive: true,
           planId: plan.id,
-          status: "ACTIVE",
-          currentPeriodEnd: newEnd,
+          trialEndsAt: null,
         },
       });
+    });
+  } catch (err) {
+    if (err instanceof AlreadyReviewedError) {
+      return NextResponse.json(
+        { success: false, error: "Already reviewed" },
+        { status: 409 },
+      );
     }
-
-    // Activate the clinic and clear the trial
-    await tx.clinic.update({
-      where: { id: request.clinicId },
-      data: {
-        isActive: true,
-        planId: plan.id,
-        trialEndsAt: null,
-      },
-    });
-
-    await tx.upgradeRequest.update({
-      where: { id },
-      data: {
-        status: "APPROVED",
-        reviewedBy: session.user.id,
-        reviewerName: session.user.name ?? "Admin",
-        reviewedAt: new Date(),
-        reviewNotes: parsed.data.reviewNotes ?? null,
-      },
-    });
-  });
+    throw err;
+  }
 
   // Notify the clinic owner
   const clinic = await prisma.clinic.findUnique({

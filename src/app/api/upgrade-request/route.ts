@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
+import { getIp } from "@/lib/utils";
 
 const schema = z.object({
   planName: z.enum(["BASIC", "STANDARD", "PRO"]),
@@ -18,7 +19,10 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Manual payment declarations mutate billing state — OWNER / ADMIN only.
+  const gate = await requireApiRole(["OWNER", "ADMIN"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -77,6 +81,7 @@ export async function POST(req: Request) {
       clinicId: session.user.clinicId,
       userId: session.user.id,
       userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
       action: "UPGRADE_REQUESTED",
       entityType: "Subscription",
       details: {

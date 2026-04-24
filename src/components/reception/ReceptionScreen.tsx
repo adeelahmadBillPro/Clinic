@@ -14,6 +14,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { usePolling } from "@/lib/hooks/usePolling";
 import { PatientSearch, type PatientHit } from "@/components/patients/PatientSearch";
 import { RegisterPatientForm } from "@/components/patients/RegisterPatientForm";
 import { IssueTokenCard } from "./IssueTokenCard";
@@ -60,10 +61,7 @@ export function ReceptionScreen({
   }, []);
 
   // Poll every 15s for doctor queue counts until we wire Socket.io
-  useEffect(() => {
-    const i = setInterval(refreshDoctors, 15000);
-    return () => clearInterval(i);
-  }, [refreshDoctors]);
+  usePolling(refreshDoctors, 15000);
 
   // Auto-select patient when linked via ?patient=<id>
   useEffect(() => {

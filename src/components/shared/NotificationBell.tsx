@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import { usePolling } from "@/lib/hooks/usePolling";
 import {
   Bell,
   UserPlus,
@@ -95,11 +96,7 @@ export function NotificationBell() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-    const i = setInterval(load, 15000);
-    return () => clearInterval(i);
-  }, [load]);
+  usePolling(load, 15000);
 
   async function markAllRead() {
     const unreadIds = items

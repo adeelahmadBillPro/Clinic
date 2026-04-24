@@ -69,13 +69,36 @@ export function LandingHero() {
             paperwork or guesswork.
           </motion.p>
           <motion.div variants={stackItem} className="mt-7 flex flex-wrap gap-3">
-            <Link
-              href="/register"
-              className={cn(buttonVariants({ size: "lg" }), "text-base")}
-            >
-              Start 10-day free trial
-              <ArrowRight className="ml-1.5 h-4 w-4" />
-            </Link>
+            {/* Breathing glow behind the primary CTA — draws the eye on
+                first paint without being loud. Sits behind the button
+                and is aria-hidden; pointer-events none so it never
+                intercepts clicks. The group-hover scale gives a tiny
+                magnetic "lean in" when the cursor is near. */}
+            <div className="relative group">
+              <motion.span
+                aria-hidden
+                className="pointer-events-none absolute -inset-1 rounded-xl bg-gradient-to-r from-primary/40 via-emerald-400/40 to-primary/40 blur-lg opacity-60"
+                animate={{
+                  opacity: [0.45, 0.75, 0.45],
+                  scale: [0.98, 1.02, 0.98],
+                }}
+                transition={{
+                  duration: 3.2,
+                  repeat: Infinity,
+                  ease: "easeInOut",
+                }}
+              />
+              <Link
+                href="/register"
+                className={cn(
+                  buttonVariants({ size: "lg" }),
+                  "relative text-base transition-transform group-hover:scale-[1.02]",
+                )}
+              >
+                Start 10-day free trial
+                <ArrowRight className="ml-1.5 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </div>
             <a
               href="#features"
               className={cn(

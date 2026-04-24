@@ -1,8 +1,6 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
-import { isAdmin } from "@/lib/permissions";
 import { StaffTable } from "@/components/staff/StaffTable";
 import { AddStaffTrigger } from "@/components/staff/AddStaffTrigger";
 
@@ -14,9 +12,8 @@ export default async function StaffPage({
 }: {
   searchParams: Promise<{ add?: string }>;
 }) {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
-  if (!isAdmin(session.user.role)) redirect("/dashboard");
+  // P3-44: role gate
+  const session = await requireRole(["OWNER", "ADMIN"], "/staff");
 
   const sp = await searchParams;
   const autoOpen = sp.add === "1";

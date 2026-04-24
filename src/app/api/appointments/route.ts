@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
-import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { nameSchema, phoneSchema } from "@/lib/validations/common";
+import { requireApiRole } from "@/lib/api-guards";
 
 const schema = z.object({
   patientId: z.string().optional(),
@@ -62,8 +62,15 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  // Reception-side booking (requires auth)
-  const session = await auth();
+  // Reception-side booking — receptionists + doctors (self-block) + admins.
+  const gate = await requireApiRole([
+    "OWNER",
+    "ADMIN",
+    "RECEPTIONIST",
+    "DOCTOR",
+  ]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -79,6 +86,30 @@ export async function POST(req: Request) {
     );
   }
   const t = db(session.user.clinicId);
+
+  // Confirm the FKs actually live in this clinic — `db(clinicId)` scopes
+  // reads, so a cross-tenant ID resolves to null here.
+  const doctor = await t.doctor.findUnique({
+    where: { id: parsed.data.doctorId },
+  });
+  if (!doctor) {
+    return NextResponse.json(
+      { success: false, error: "Doctor not found", field: "doctorId" },
+      { status: 404 },
+    );
+  }
+  if (parsed.data.patientId) {
+    const patient = await t.patient.findUnique({
+      where: { id: parsed.data.patientId },
+    });
+    if (!patient) {
+      return NextResponse.json(
+        { success: false, error: "Patient not found", field: "patientId" },
+        { status: 404 },
+      );
+    }
+  }
+
   const apptDay = new Date(parsed.data.appointmentDate);
   const dayStart = new Date(apptDay);
   dayStart.setHours(0, 0, 0, 0);
@@ -102,21 +133,37 @@ export async function POST(req: Request) {
     );
   }
 
-  const appt = await t.appointment.create({
-    data: {
-      clinicId: session.user.clinicId,
-      patientId: parsed.data.patientId ?? null,
-      patientName: parsed.data.patientName,
-      patientPhone: parsed.data.patientPhone,
-      doctorId: parsed.data.doctorId,
-      appointmentDate: apptDay,
-      timeSlot: parsed.data.timeSlot,
-      type: parsed.data.type,
-      status: "SCHEDULED",
-      notes: parsed.data.notes ?? null,
-      bookedVia: parsed.data.bookedVia,
-    },
-  });
+  // The DB-level partial unique index is the authoritative slot lock —
+  // the pre-check above is a friendly fast-path, this catches the race.
+  let appt;
+  try {
+    appt = await t.appointment.create({
+      data: {
+        clinicId: session.user.clinicId,
+        patientId: parsed.data.patientId ?? null,
+        patientName: parsed.data.patientName,
+        patientPhone: parsed.data.patientPhone,
+        doctorId: parsed.data.doctorId,
+        appointmentDate: apptDay,
+        timeSlot: parsed.data.timeSlot,
+        type: parsed.data.type,
+        status: "SCHEDULED",
+        notes: parsed.data.notes ?? null,
+        bookedVia: parsed.data.bookedVia,
+      },
+    });
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2002") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "This slot was just booked by someone else. Pick another.",
+        },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   revalidatePath("/appointments");
   revalidatePath("/reception");

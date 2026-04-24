@@ -6,6 +6,7 @@ import { db } from "@/lib/tenant-db";
 import { isAdmin } from "@/lib/permissions";
 import { hashPassword } from "@/lib/password";
 import { addStaffSchema } from "@/lib/validations/staff";
+import { getIp } from "@/lib/utils";
 
 export async function GET() {
   const session = await auth();
@@ -177,6 +178,7 @@ export async function POST(req: Request) {
         clinicId,
         userId: session.user.id,
         userName: session.user.name ?? "User",
+        ipAddress: getIp(req),
         action: "STAFF_ADDED",
         entityType: "User",
         entityId: user.id,

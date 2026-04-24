@@ -1,6 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { ArrowLeft, BedDouble, Calendar, Stethoscope } from "lucide-react";
@@ -16,8 +16,12 @@ export default async function AdmissionDetailPage({
   params: Promise<{ admissionId: string }>;
 }) {
   const { admissionId } = await params;
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "NURSE", "DOCTOR"],
+    "/ipd/[admissionId]",
+  );
+  void session;
 
   const t = db(session.user.clinicId);
   const adm = await t.ipdAdmission.findUnique({ where: { id: admissionId } });

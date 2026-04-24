@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { isAdmin } from "@/lib/permissions";
 import { DoctorDesk } from "@/components/doctor/DoctorDesk";
@@ -9,12 +8,11 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "My queue — ClinicOS" };
 
 export default async function DoctorPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
-
-  if (session.user.role !== "DOCTOR" && !isAdmin(session.user.role)) {
-    redirect("/dashboard");
-  }
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "DOCTOR"],
+    "/doctor",
+  );
 
   const t = db(session.user.clinicId);
 

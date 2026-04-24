@@ -24,8 +24,10 @@ function isPublic(pathname: string): boolean {
   if (pathname.startsWith("/api/forgot-password")) return true;
   if (pathname.startsWith("/api/reset-password")) return true;
   if (pathname.startsWith("/api/reviews")) return true;
-  if (pathname.startsWith("/api/doctors/") && pathname.endsWith("/reviews")) return true;
-  if (pathname.startsWith("/api/doctors/") && pathname.endsWith("/slots")) return true;
+  // `endsWith` would also allow `/api/anything/reviews` when combined with
+  // a startsWith — tighten to exact-shape regex.
+  if (/^\/api\/doctors\/[^/]+\/reviews$/.test(pathname)) return true;
+  if (/^\/api\/doctors\/[^/]+\/slots$/.test(pathname)) return true;
   return false;
 }
 

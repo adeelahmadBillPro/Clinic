@@ -75,8 +75,15 @@ export async function PATCH(req: Request) {
     );
   }
 
-  await prisma.doctor.update({
-    where: { id: existing.id },
+  // Scope by userId + clinicId even though the id came from a tenant-
+  // scoped findFirst — keeps the write safe even if the prior read is
+  // ever refactored.
+  await prisma.doctor.updateMany({
+    where: {
+      id: existing.id,
+      clinicId: session.user.clinicId,
+      userId: session.user.id,
+    },
     data: {
       schedule: {
         ...parsed.data.schedule,

@@ -2,6 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
+import { rateLimit, getIp, LIMITS } from "@/lib/rate-limit";
+
+// Strip control characters and cap length. Note is shown in admin UI
+// later, so we accept unicode letters / punctuation but not \x00-\x1F.
+function sanitizeNote(s: string | undefined): string | null {
+  if (!s) return null;
+  const cleaned = s.replace(/[\x00-\x1F\x7F]+/g, " ").trim();
+  return cleaned ? cleaned.slice(0, 500) : null;
+}
 
 const schema = z.object({
   patientName: z.string().trim().min(2).max(150),
@@ -75,7 +84,29 @@ export async function POST(
   req: Request,
   { params }: { params: Promise<{ slug: string }> },
 ) {
+  // Public endpoint — bucket per IP to keep a bored teen from booking 10k
+  // phantom slots. Keyed on slug + IP so a single IP trying many clinics
+  // isn't aggregated into one bucket.
   const { slug } = await params;
+  const ip = getIp(req);
+  const gate = rateLimit(
+    `book:${slug}:${ip}`,
+    LIMITS.BOOKINGS_PER_HOUR.max,
+    LIMITS.BOOKINGS_PER_HOUR.windowMs,
+  );
+  if (!gate.ok) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Too many booking attempts. Please try again later.",
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(gate.retryAfterSec) },
+      },
+    );
+  }
+
   const clinic = await prisma.clinic.findUnique({
     where: { slug },
     select: { id: true, name: true, isActive: true },
@@ -151,20 +182,36 @@ export async function POST(
     );
   }
 
-  const appt = await t.appointment.create({
-    data: {
-      clinicId: clinic.id,
-      patientName: parsed.data.patientName,
-      patientPhone: parsed.data.patientPhone,
-      doctorId: parsed.data.doctorId,
-      appointmentDate: new Date(parsed.data.appointmentDate),
-      timeSlot: parsed.data.timeSlot,
-      type: "FIRST_VISIT",
-      status: "SCHEDULED",
-      notes: parsed.data.notes ?? null,
-      bookedVia: "ONLINE",
-    },
-  });
+  // Public booking races with reception booking for the same slot — the
+  // DB-level partial unique index settles ties deterministically.
+  let appt;
+  try {
+    appt = await t.appointment.create({
+      data: {
+        clinicId: clinic.id,
+        patientName: parsed.data.patientName,
+        patientPhone: parsed.data.patientPhone,
+        doctorId: parsed.data.doctorId,
+        appointmentDate: new Date(parsed.data.appointmentDate),
+        timeSlot: parsed.data.timeSlot,
+        type: "FIRST_VISIT",
+        status: "SCHEDULED",
+        notes: sanitizeNote(parsed.data.notes),
+        bookedVia: "ONLINE",
+      },
+    });
+  } catch (err) {
+    if ((err as { code?: string })?.code === "P2002") {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "This time slot was just booked by someone else. Please pick another.",
+        },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 
   return NextResponse.json({
     success: true,

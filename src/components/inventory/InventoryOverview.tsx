@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, AlertTriangle, Plus } from "lucide-react";
+import { Search, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { KpiCard } from "@/components/dashboard/KpiCard";
 import { AddMedicineDialog } from "./AddMedicineDialog";
 import { EditStockDialog } from "./EditStockDialog";

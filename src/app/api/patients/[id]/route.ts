@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/permissions";
+import { getIp } from "@/lib/utils";
 import {
   nameSchema,
   phoneSchema,
@@ -33,6 +34,8 @@ const patchSchema = z.object({
   chronicConditions: z.array(z.string().max(80)).max(20).optional(),
   emergencyContact: z.string().max(100).optional().nullable(),
   emergencyPhone: optionalPhoneSchema,
+  // P3-41: manual opt-out toggle until a Twilio STOP webhook is wired in.
+  optOutWhatsApp: z.boolean().optional(),
 });
 
 export async function GET(
@@ -111,8 +114,11 @@ export async function PATCH(
   }
   const d = parsed.data;
 
-  const updated = await prisma.patient.update({
-    where: { id },
+  // updateMany + clinicId gates the write to the tenant we know about.
+  // The existence check above would usually catch cross-tenant but having
+  // the tenant predicate on the write itself is belt-and-braces.
+  const updated = await prisma.patient.updateMany({
+    where: { id, clinicId: session.user.clinicId },
     data: {
       ...(d.name !== undefined ? { name: d.name } : {}),
       ...(d.phone !== undefined ? { phone: d.phone } : {}),
@@ -134,26 +140,37 @@ export async function PATCH(
       ...(d.emergencyPhone !== undefined
         ? { emergencyPhone: d.emergencyPhone || null }
         : {}),
+      ...(d.optOutWhatsApp !== undefined
+        ? { optOutWhatsApp: d.optOutWhatsApp }
+        : {}),
     },
   });
+
+  if (updated.count === 0) {
+    return NextResponse.json(
+      { success: false, error: "Patient not found" },
+      { status: 404 },
+    );
+  }
 
   await t.auditLog.create({
     data: {
       clinicId: session.user.clinicId,
       userId: session.user.id,
       userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
       action: "PATIENT_UPDATED",
       entityType: "Patient",
-      entityId: updated.id,
+      entityId: id,
       details: { fields: Object.keys(d) },
     },
   });
 
-  return NextResponse.json({ success: true, data: { id: updated.id } });
+  return NextResponse.json({ success: true, data: { id } });
 }
 
 export async function DELETE(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
@@ -185,8 +202,10 @@ export async function DELETE(
     where: { patientId: id, status: { in: ["PAID", "PARTIAL"] } },
   });
   if (paidBills > 0) {
-    await prisma.patient.update({
-      where: { id },
+    // Tenant-scoped soft-delete so a misbehaving client can't flip
+    // another clinic's patient inactive.
+    await prisma.patient.updateMany({
+      where: { id, clinicId: session.user.clinicId },
       data: { isActive: false },
     });
     await t.auditLog.create({
@@ -194,6 +213,7 @@ export async function DELETE(
         clinicId: session.user.clinicId,
         userId: session.user.id,
         userName: session.user.name ?? "User",
+        ipAddress: getIp(req),
         action: "PATIENT_DEACTIVATED",
         entityType: "Patient",
         entityId: id,
@@ -206,9 +226,12 @@ export async function DELETE(
     });
   }
 
-  // Safe to hard delete — cascade all clinical records
+  // Safe to hard delete — cascade all clinical records. Every delete is
+  // scoped by clinicId as well as patientId so a forged id can't wipe
+  // records in a sibling tenant.
+  const clinicId = session.user.clinicId;
   await prisma.$transaction(async (tx) => {
-    const w = { patientId: id };
+    const w = { patientId: id, clinicId };
     await tx.pharmacyOrder.deleteMany({ where: w });
     await tx.prescription.deleteMany({ where: w });
     await tx.vitalSigns.deleteMany({ where: w });
@@ -220,7 +243,7 @@ export async function DELETE(
     await tx.appointment.deleteMany({ where: w });
     await tx.token.deleteMany({ where: w });
     await tx.bill.deleteMany({ where: w });
-    await tx.patient.delete({ where: { id } });
+    await tx.patient.deleteMany({ where: { id, clinicId } });
   });
 
   await t.auditLog.create({
@@ -228,6 +251,7 @@ export async function DELETE(
       clinicId: session.user.clinicId,
       userId: session.user.id,
       userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
       action: "PATIENT_DELETED",
       entityType: "Patient",
       entityId: id,

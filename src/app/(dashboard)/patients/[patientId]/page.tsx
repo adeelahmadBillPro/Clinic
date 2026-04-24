@@ -1,6 +1,6 @@
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { AllergyBanner } from "@/components/shared/AllergyBanner";
@@ -49,8 +49,11 @@ export default async function PatientEmrPage({
   params: Promise<{ patientId: string }>;
 }) {
   const { patientId } = await params;
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "DOCTOR", "RECEPTIONIST", "NURSE"],
+    "/patients/[patientId]",
+  );
 
   const t = db(session.user.clinicId);
   const patient = await t.patient.findUnique({ where: { id: patientId } });

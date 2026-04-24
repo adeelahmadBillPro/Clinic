@@ -21,6 +21,43 @@ export class AuthError extends Error {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: {
+    ...authConfig.callbacks,
+    // Node-side jwt callback: on every refresh (no `user` object means this
+    // isn't a fresh sign-in), re-read the live User row so deactivation or
+    // role changes take effect without waiting for JWT expiry.
+    //
+    // Returning null here invalidates the session.
+    //
+    // Middleware uses the edge-safe callback from authConfig — no DB hit
+    // there to keep middleware fast.
+    async jwt({ token, user }) {
+      if (user) {
+        token.id = (user as { id?: string }).id ?? token.id;
+        token.role = (user as { role?: Role }).role ?? token.role;
+        token.clinicId =
+          (user as { clinicId?: string | null }).clinicId ?? token.clinicId;
+        return token;
+      }
+      if (token.id) {
+        const fresh = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: {
+            isActive: true,
+            role: true,
+            clinicId: true,
+            emailVerifiedAt: true,
+          },
+        });
+        if (!fresh || !fresh.isActive || !fresh.emailVerifiedAt) {
+          return null;
+        }
+        token.role = fresh.role;
+        token.clinicId = fresh.clinicId;
+      }
+      return token;
+    },
+  },
   providers: [
     Credentials({
       credentials: {
@@ -41,6 +78,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           throw new AuthError(
             "INVALID_CREDENTIALS",
             "Invalid email or password",
+          );
+        }
+        // Block unverified signups — prevents using a freshly registered
+        // account before the verification link has been clicked.
+        if (!user.emailVerifiedAt) {
+          throw new AuthError(
+            "EMAIL_NOT_VERIFIED",
+            "Please verify your email first. Check your inbox for the link.",
           );
         }
 

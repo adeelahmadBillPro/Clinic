@@ -3,6 +3,8 @@ import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
 import { findLabTest, LAB_CATALOG } from "@/lib/labCatalog";
+import { requireApiRole } from "@/lib/api-guards";
+import { nextSequence, pad } from "@/lib/counter";
 
 const schema = z.object({
   patientId: z.string().min(1),
@@ -51,7 +53,15 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Ordering tests charges the patient — doctors + lab / admins.
+  const gate = await requireApiRole([
+    "OWNER",
+    "ADMIN",
+    "DOCTOR",
+    "LAB_TECH",
+  ]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -70,6 +80,51 @@ export async function POST(req: Request) {
   const clinicId = session.user.clinicId;
   const t = db(clinicId);
 
+  // FK tenant validation. `db(clinicId)` scopes findUnique so a cross-tenant
+  // id resolves to null.
+  const patient = await t.patient.findUnique({
+    where: { id: parsed.data.patientId },
+  });
+  if (!patient) {
+    return NextResponse.json(
+      { success: false, error: "Patient not found", field: "patientId" },
+      { status: 404 },
+    );
+  }
+  if (parsed.data.doctorId) {
+    const doc = await t.doctor.findUnique({
+      where: { id: parsed.data.doctorId },
+    });
+    if (!doc) {
+      return NextResponse.json(
+        { success: false, error: "Doctor not found", field: "doctorId" },
+        { status: 404 },
+      );
+    }
+  }
+  if (parsed.data.consultationId) {
+    const cons = await t.consultation.findUnique({
+      where: { id: parsed.data.consultationId },
+    });
+    if (!cons) {
+      return NextResponse.json(
+        { success: false, error: "Consultation not found", field: "consultationId" },
+        { status: 404 },
+      );
+    }
+  }
+  if (parsed.data.admissionId) {
+    const adm = await t.ipdAdmission.findUnique({
+      where: { id: parsed.data.admissionId },
+    });
+    if (!adm) {
+      return NextResponse.json(
+        { success: false, error: "Admission not found", field: "admissionId" },
+        { status: 404 },
+      );
+    }
+  }
+
   const tests = parsed.data.testCodes
     .map((c) => findLabTest(c))
     .filter((x): x is (typeof LAB_CATALOG)[number] => !!x);
@@ -83,17 +138,8 @@ export async function POST(req: Request) {
   const total = tests.reduce((s, t) => s + t.price, 0);
 
   const year = new Date().getFullYear();
-  const last = await t.labOrder.findFirst({
-    where: { orderNumber: { startsWith: `LAB-${year}-` } },
-    orderBy: { orderNumber: "desc" },
-    select: { orderNumber: true },
-  });
-  let nextNum = 1;
-  if (last?.orderNumber) {
-    const m = last.orderNumber.match(/-(\d+)$/);
-    if (m) nextNum = parseInt(m[1], 10) + 1;
-  }
-  const orderNumber = `LAB-${year}-${String(nextNum).padStart(4, "0")}`;
+  const seq = await nextSequence(clinicId, "LAB", undefined, year);
+  const orderNumber = `LAB-${year}-${pad(seq, 4)}`;
 
   // Doctor can be inferred from consultation if not provided
   let doctorId = parsed.data.doctorId;

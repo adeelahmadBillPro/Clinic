@@ -29,21 +29,21 @@ export async function GET(req: Request) {
     select: { id: true, name: true, isActive: true },
   });
 
+  // Single groupBy instead of one `count` per doctor (N+1 on the doctor
+  // list endpoint was a real pig on clinics with 15+ doctors).
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const queueCounts = await Promise.all(
-    doctors.map(async (d) => {
-      const waiting = await t.token.count({
-        where: {
-          doctorId: d.id,
-          status: { in: ["WAITING", "CALLED", "IN_PROGRESS"] },
-          issuedAt: { gte: today },
-        },
-      });
-      return { doctorId: d.id, waiting };
-    }),
+  const waitGroups = await t.token.groupBy({
+    by: ["doctorId"],
+    where: {
+      issuedAt: { gte: today },
+      status: { in: ["WAITING", "CALLED", "IN_PROGRESS"] },
+    },
+    _count: { _all: true },
+  });
+  const waitById = new Map(
+    waitGroups.map((g) => [g.doctorId, g._count._all]),
   );
-  const waitById = new Map(queueCounts.map((q) => [q.doctorId, q.waiting]));
 
   const data = doctors
     .map((d) => {

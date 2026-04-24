@@ -123,19 +123,28 @@ export function PrescriptionBuilder({
       setHits([]);
       return;
     }
+    // Cancel in-flight medicine lookups — doctors type fast, and stale
+    // responses would overwrite the fresh hit list.
+    const ac = new AbortController();
     const handle = setTimeout(async () => {
       setLoading(true);
       try {
         const res = await fetch(
           `/api/inventory/medicines?q=${encodeURIComponent(query)}&limit=6`,
+          { signal: ac.signal },
         );
         const body = await res.json();
         if (body?.success) setHits(body.data);
+      } catch (e) {
+        if ((e as Error).name !== "AbortError") throw e;
       } finally {
         setLoading(false);
       }
     }, 200);
-    return () => clearTimeout(handle);
+    return () => {
+      clearTimeout(handle);
+      ac.abort();
+    };
   }, [query]);
 
   const update = useCallback(

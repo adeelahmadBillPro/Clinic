@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
+import { nextSequence, pad } from "@/lib/counter";
+import { getIp } from "@/lib/utils";
+
+class InsufficientStockError extends Error {
+  medicineName: string;
+  constructor(name: string) {
+    super(`INSUFFICIENT_STOCK:${name}`);
+    this.medicineName = name;
+  }
+}
 
 const schema = z.object({
   items: z.array(
@@ -25,7 +35,11 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const session = await auth();
+  // Dispensing decrements stock and records payment — pharmacist /
+  // admin only. Everyone else would corrupt inventory.
+  const gate = await requireApiRole(["PHARMACIST", "OWNER", "ADMIN"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -52,6 +66,18 @@ export async function POST(
     );
   }
 
+  // Attribute revenue to the prescribing doctor (P3-33). PharmacyOrder
+  // links back to a Prescription; the doctor on that prescription is the
+  // one whose order generated this bill.
+  let prescribingDoctorId: string | null = null;
+  if (order.prescriptionId) {
+    const rx = await t.prescription.findUnique({
+      where: { id: order.prescriptionId },
+      select: { doctorId: true },
+    });
+    prescribingDoctorId = rx?.doctorId ?? null;
+  }
+
   const dispensedItems = parsed.data.items;
   const anyDispensed = dispensedItems.some((i) => i.dispensedQty > 0);
   if (!anyDispensed) {
@@ -76,32 +102,36 @@ export async function POST(
   );
   const status = allRequestedMet ? "DISPENSED" : "PARTIAL";
 
-  const result = await prisma.$transaction(async (tx) => {
-    // Decrement stock for each item with a medicineId
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+    // Conditional decrement — only succeeds when stockQty >= qty AND the
+    // medicine belongs to this clinic. Without this, two pharmacists
+    // dispensing the last 3 tablets each would both succeed and leave
+    // stockQty at -3.
     for (const it of dispensedItems) {
       if (!it.medicineId || it.dispensedQty <= 0) continue;
-      const med = await tx.medicine.findFirst({
-        where: { id: it.medicineId, clinicId },
+      const flip = await tx.medicine.updateMany({
+        where: {
+          id: it.medicineId,
+          clinicId,
+          stockQty: { gte: it.dispensedQty },
+        },
+        data: { stockQty: { decrement: it.dispensedQty } },
       });
-      if (med) {
-        await tx.medicine.update({
-          where: { id: med.id },
-          data: {
-            stockQty: { decrement: it.dispensedQty },
-          },
-        });
-        await tx.stockMovement.create({
-          data: {
-            clinicId,
-            medicineId: med.id,
-            type: "OUT",
-            qty: it.dispensedQty,
-            reason: `Dispensed — ${order.orderNumber}`,
-            reference: order.orderNumber,
-            doneBy: session.user.id,
-          },
-        });
+      if (flip.count === 0) {
+        throw new InsufficientStockError(it.name);
       }
+      await tx.stockMovement.create({
+        data: {
+          clinicId,
+          medicineId: it.medicineId,
+          type: "OUT",
+          qty: it.dispensedQty,
+          reason: `Dispensed — ${order.orderNumber}`,
+          reference: order.orderNumber,
+          doneBy: session.user.id,
+        },
+      });
     }
 
     const updatedOrder = await tx.pharmacyOrder.update({
@@ -122,25 +152,18 @@ export async function POST(
       },
     });
 
-    // Generate bill
+    // Atomic bill number — see src/lib/counter.ts.
     const year = new Date().getFullYear();
-    const last = await tx.bill.findFirst({
-      where: { clinicId, billNumber: { startsWith: `BL-${year}-` } },
-      orderBy: { billNumber: "desc" },
-      select: { billNumber: true },
-    });
-    let nextNum = 1;
-    if (last?.billNumber) {
-      const match = last.billNumber.match(/-(\d+)$/);
-      if (match) nextNum = parseInt(match[1], 10) + 1;
-    }
-    const billNumber = `BL-${year}-${String(nextNum).padStart(4, "0")}`;
+    const seq = await nextSequence(clinicId, "BILL", tx, year);
+    const billNumber = `BL-${year}-${pad(seq, 4)}`;
 
     const bill = await tx.bill.create({
       data: {
         clinicId,
         billNumber,
         patientId: order.patientId,
+        // Attribute to prescribing doctor when known — see P3-33.
+        doctorId: prescribingDoctorId,
         billType: "PHARMACY",
         items: dispensedItems.map((i) => ({
           description: i.name,
@@ -172,6 +195,7 @@ export async function POST(
         clinicId,
         userId: session.user.id,
         userName: session.user.name ?? "User",
+        ipAddress: getIp(req),
         action: "PRESCRIPTION_DISPENSED",
         entityType: "PharmacyOrder",
         entityId: order.id,
@@ -180,7 +204,18 @@ export async function POST(
     });
 
     return { orderId: updatedOrder.id, billId: bill.id, billNumber };
-  });
-
-  return NextResponse.json({ success: true, data: result });
+    });
+    return NextResponse.json({ success: true, data: result });
+  } catch (err) {
+    if (err instanceof InsufficientStockError) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Insufficient stock for ${err.medicineName}`,
+        },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
 }

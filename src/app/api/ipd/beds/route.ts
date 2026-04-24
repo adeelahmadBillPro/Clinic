@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
 
 const schema = z.object({
   bedNumber: z.string().trim().min(1),
@@ -51,7 +52,10 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Adding a ward bed is facility configuration — admins only.
+  const gate = await requireApiRole(["OWNER", "ADMIN"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },

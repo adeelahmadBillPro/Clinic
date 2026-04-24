@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { usePolling } from "@/lib/hooks/usePolling";
 import {
   PhoneCall,
   XCircle,
-  CheckCircle2,
   Loader2,
   Zap,
   RefreshCcw,
@@ -111,11 +111,7 @@ export function TokenBoard() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-    const i = setInterval(load, 7000);
-    return () => clearInterval(i);
-  }, [load]);
+  usePolling(load, 7000);
 
   const filtered =
     tab === "ALL"

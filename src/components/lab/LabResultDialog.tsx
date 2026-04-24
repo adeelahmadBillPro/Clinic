@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, Printer, CheckCircle2, Beaker, MessageCircle } from "lucide-react";
+import { Loader2, Printer, CheckCircle2, Beaker } from "lucide-react";
 import { toast } from "sonner";
 
 import {

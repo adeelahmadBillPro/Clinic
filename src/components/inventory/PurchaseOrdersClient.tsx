@@ -353,6 +353,7 @@ export function PurchaseOrdersClient({
                   <Link
                     href={`/inventory/purchase-orders/${p.id}`}
                     target="_blank"
+                    rel="noopener noreferrer"
                     className="inline-flex h-8 items-center gap-1 rounded-md border bg-card px-2.5 text-xs font-medium hover:bg-accent/60"
                     title="Open / print"
                   >

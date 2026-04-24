@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { generateOtp, hashOtp } from "@/lib/password";
 import { forgotPasswordSchema } from "@/lib/validations/auth";
 import { maskEmail, passwordResetEmailTemplate, sendEmail } from "@/lib/email";
+import { runAfterResponse } from "@/lib/background";
 
 const OTP_TTL_MINUTES = 10;
 
@@ -26,10 +27,15 @@ export async function POST(req: Request) {
   }
 
   const { email } = parsed.data;
-  const user = await prisma.user.findUnique({ where: { email } });
 
-  // Always return success (no account enumeration), but only send if user exists
-  if (user && user.isActive) {
+  // Account enumeration via timing: the DB write + Resend API call take
+  // hundreds of ms when the user exists, and ~0ms when they don't. Push
+  // all the work to `after()` so the response time is identical for the
+  // enumerator.
+  runAfterResponse(async () => {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !user.isActive) return;
+
     const otp = generateOtp();
     const otpHash = hashOtp(otp);
     const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60_000);
@@ -49,8 +55,13 @@ export async function POST(req: Request) {
     }
 
     const tpl = passwordResetEmailTemplate(otp, clinicName);
-    await sendEmail({ to: user.email, subject: tpl.subject, html: tpl.html, text: tpl.text });
-  }
+    await sendEmail({
+      to: user.email,
+      subject: tpl.subject,
+      html: tpl.html,
+      text: tpl.text,
+    });
+  });
 
   return NextResponse.json({
     success: true,

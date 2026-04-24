@@ -6,7 +6,19 @@ export const profileSchema = z
     name: nameSchema,
     email: z.string().trim().toLowerCase().email("Enter a valid email"),
     phone: optionalPhoneSchema,
-    photoUrl: z.string().max(1000).optional().nullable(),
+    // After P1-5 uploads go through Cloudinary; reject anything that
+    // doesn't look like a Cloudinary URL so a malicious PATCH can't point
+    // photoUrl at an attacker-controlled origin (which would then render
+    // inline in the dashboard).
+    photoUrl: z
+      .string()
+      .max(1000)
+      .regex(
+        /^https:\/\/res\.cloudinary\.com\/[a-z0-9_-]+\//i,
+        "Invalid photo URL",
+      )
+      .optional()
+      .nullable(),
 
     // Doctor-only (ignored for other roles)
     specialization: z.string().trim().max(100).optional(),

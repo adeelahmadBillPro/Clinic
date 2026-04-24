@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
+import { nextSequence, pad } from "@/lib/counter";
 
 const schema = z.object({
   dischargeDiagnosis: z.string().optional(),
@@ -14,7 +15,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const session = await auth();
+  // Discharging creates a bill + frees a bed — doctor/nurse + admins.
+  const gate = await requireApiRole(["OWNER", "ADMIN", "DOCTOR", "NURSE"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -113,65 +117,77 @@ export async function POST(
 
   const total = lineItems.reduce((s, l) => s + l.amount, 0);
 
-  // Generate bill number
   const year = new Date().getFullYear();
-  const last = await t.bill.findFirst({
-    where: { billNumber: { startsWith: `BL-${year}-` } },
-    orderBy: { billNumber: "desc" },
-    select: { billNumber: true },
-  });
-  let nextNum = 1;
-  if (last?.billNumber) {
-    const m = last.billNumber.match(/-(\d+)$/);
-    if (m) nextNum = parseInt(m[1], 10) + 1;
+
+  try {
+    const result = await prisma.$transaction(async (tx) => {
+      // CAS on discharge — only the first click succeeds. A re-click
+      // would otherwise create a second bill and free an already-free bed.
+      const flip = await tx.ipdAdmission.updateMany({
+        where: { id: admission.id, clinicId, status: "ADMITTED" },
+        data: {
+          status: "DISCHARGED",
+          dischargeDate: now,
+          dischargeDiagnosis: parsed.data.dischargeDiagnosis ?? null,
+          dischargeNotes: parsed.data.dischargeNotes ?? null,
+          totalCharges: total,
+        },
+      });
+      if (flip.count === 0) {
+        throw new AlreadyDischargedError();
+      }
+
+      // Bill number allocated inside the same tx as the bill create so a
+      // rolled-back discharge doesn't waste a number.
+      const seq = await nextSequence(clinicId, "BILL", tx, year);
+      const billNumber = `BL-${year}-${pad(seq, 4)}`;
+      await tx.bed.update({
+        where: { id: bed.id },
+        data: { isOccupied: false, currentPatientId: null },
+      });
+      const bill = await tx.bill.create({
+        data: {
+          clinicId,
+          billNumber,
+          patientId: admission.patientId,
+          // Attribute IPD bill to the admitting doctor — see P3-33.
+          doctorId: admission.doctorId,
+          billType: "IPD",
+          admissionId: admission.id,
+          items: lineItems,
+          subtotal: total,
+          discount: 0,
+          totalAmount: total,
+          paidAmount: 0,
+          balance: total,
+          status: "PENDING",
+          collectedBy: session.user.id,
+        },
+      });
+      return { billId: bill.id, billNumber };
+    });
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        billId: result.billId,
+        billNumber: result.billNumber,
+        total,
+        days,
+        bedCharge,
+        pharmacySum,
+        labSum,
+      },
+    });
+  } catch (err) {
+    if (err instanceof AlreadyDischargedError) {
+      return NextResponse.json(
+        { success: false, error: "Patient is already discharged" },
+        { status: 409 },
+      );
+    }
+    throw err;
   }
-  const billNumber = `BL-${year}-${String(nextNum).padStart(4, "0")}`;
-
-  const result = await prisma.$transaction(async (tx) => {
-    await tx.ipdAdmission.update({
-      where: { id: admission.id },
-      data: {
-        status: "DISCHARGED",
-        dischargeDate: now,
-        dischargeDiagnosis: parsed.data.dischargeDiagnosis ?? null,
-        dischargeNotes: parsed.data.dischargeNotes ?? null,
-        totalCharges: total,
-      },
-    });
-    await tx.bed.update({
-      where: { id: bed.id },
-      data: { isOccupied: false, currentPatientId: null },
-    });
-    const bill = await tx.bill.create({
-      data: {
-        clinicId,
-        billNumber,
-        patientId: admission.patientId,
-        billType: "IPD",
-        admissionId: admission.id,
-        items: lineItems,
-        subtotal: total,
-        discount: 0,
-        totalAmount: total,
-        paidAmount: 0,
-        balance: total,
-        status: "PENDING",
-        collectedBy: session.user.id,
-      },
-    });
-    return { billId: bill.id, billNumber };
-  });
-
-  return NextResponse.json({
-    success: true,
-    data: {
-      billId: result.billId,
-      billNumber: result.billNumber,
-      total,
-      days,
-      bedCharge,
-      pharmacySum,
-      labSum,
-    },
-  });
 }
+
+class AlreadyDischargedError extends Error {}

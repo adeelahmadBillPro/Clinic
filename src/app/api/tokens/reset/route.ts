@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { isAdmin } from "@/lib/permissions";
+import { getIp } from "@/lib/utils";
 
-export async function POST() {
+export async function POST(req: Request) {
   const session = await auth();
   if (!session?.user?.clinicId) {
     return NextResponse.json(
@@ -38,6 +39,7 @@ export async function POST() {
       clinicId: session.user.clinicId,
       userId: session.user.id,
       userName: session.user.name ?? "User",
+      ipAddress: getIp(req),
       action: "TOKEN_RESET",
       entityType: "Token",
       details: { expiredCount: count },

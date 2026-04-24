@@ -1,5 +1,4 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { requireRole } from "@/lib/require-role";
 import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
 import { AppointmentsBoard } from "@/components/appointments/AppointmentsBoard";
@@ -8,8 +7,11 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Appointments — ClinicOS" };
 
 export default async function AppointmentsPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
+  // P3-44: role gate
+  const session = await requireRole(
+    ["OWNER", "ADMIN", "RECEPTIONIST", "DOCTOR"],
+    "/appointments",
+  );
 
   const clinic = await prisma.clinic.findUnique({
     where: { id: session.user.clinicId },
@@ -53,7 +55,7 @@ export default async function AppointmentsPage() {
           <a
             href={`/book/${clinic.slug}`}
             target="_blank"
-            rel="noreferrer"
+            rel="noopener noreferrer"
             className="text-xs font-medium text-primary hover:underline"
           >
             Public booking link →

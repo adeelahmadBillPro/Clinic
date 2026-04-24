@@ -1,6 +1,4 @@
-import { redirect } from "next/navigation";
-import { auth } from "@/auth";
-import { isAdmin } from "@/lib/permissions";
+import { requireRole } from "@/lib/require-role";
 import {
   defaultRange,
   getRevenueBreakdown,
@@ -15,9 +13,8 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Analytics — ClinicOS" };
 
 export default async function AnalyticsPage() {
-  const session = await auth();
-  if (!session?.user?.clinicId) redirect("/login");
-  if (!isAdmin(session.user.role)) redirect("/dashboard");
+  // P3-44: role gate
+  const session = await requireRole(["OWNER", "ADMIN"], "/analytics");
 
   const range = defaultRange(30);
 

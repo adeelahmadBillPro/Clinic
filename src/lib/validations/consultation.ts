@@ -19,14 +19,21 @@ export const diagnosisSchema = z.object({
 });
 export type DiagnosisItem = z.infer<typeof diagnosisSchema>;
 
+// Physiological bounds. Reject impossible values so typos don't become
+// records, and so the BMI calc below can trust its inputs.
 export const vitalsSchema = z.object({
-  bp: z.string().optional(),
-  pulse: z.coerce.number().int().optional(),
-  temperature: z.coerce.number().optional(),
-  weight: z.coerce.number().optional(),
-  height: z.coerce.number().optional(),
-  spO2: z.coerce.number().int().optional(),
-  bloodSugar: z.coerce.number().optional(),
+  bp: z
+    .string()
+    .trim()
+    .regex(/^\d{2,3}\/\d{2,3}$/, "BP like 120/80")
+    .optional()
+    .or(z.literal("")),
+  pulse: z.coerce.number().int().min(30).max(250).optional(),
+  temperature: z.coerce.number().min(30).max(45).optional(),
+  weight: z.coerce.number().min(0.5).max(500).optional(),
+  height: z.coerce.number().min(30).max(260).optional(),
+  spO2: z.coerce.number().int().min(50).max(100).optional(),
+  bloodSugar: z.coerce.number().min(20).max(800).optional(),
 });
 export type VitalsInput = z.infer<typeof vitalsSchema>;
 

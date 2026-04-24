@@ -5,6 +5,8 @@ import { db } from "@/lib/tenant-db";
 import { issueTokenSchema } from "@/lib/validations/token";
 import { nextTokenNumber, startOfToday, tokenExpiryFromNow } from "@/lib/token";
 import { prisma } from "@/lib/prisma";
+import { nextSequence, pad } from "@/lib/counter";
+import { getIp } from "@/lib/utils";
 
 export async function GET(req: Request) {
   const session = await auth();
@@ -243,19 +245,10 @@ export async function POST(req: Request) {
         ? input.feeAmount
         : Number(doctor.consultationFee);
     if (fee > 0) {
-      // Generate bill number BL-YYYY-NNNN (per clinic)
+      // Atomic sequence — see src/lib/counter.ts.
       const year = new Date().getFullYear();
-      const last = await tx.bill.findFirst({
-        where: { clinicId, billNumber: { startsWith: `BL-${year}-` } },
-        orderBy: { billNumber: "desc" },
-        select: { billNumber: true },
-      });
-      let nextNum = 1;
-      if (last?.billNumber) {
-        const match = last.billNumber.match(/-(\d+)$/);
-        if (match) nextNum = parseInt(match[1], 10) + 1;
-      }
-      const billNumber = `BL-${year}-${String(nextNum).padStart(4, "0")}`;
+      const seq = await nextSequence(clinicId, "BILL", tx, year);
+      const billNumber = `BL-${year}-${pad(seq, 4)}`;
 
       const paid = input.feePaid === false ? 0 : fee;
       const bill = await tx.bill.create({
@@ -263,6 +256,8 @@ export async function POST(req: Request) {
           clinicId,
           billNumber,
           patientId: input.patientId,
+          // doctorId attribution — see P3-33 and `/api/stats/*`.
+          doctorId: doctor.id,
           billType: "OPD" as const,
           items: [
             {
@@ -303,6 +298,7 @@ export async function POST(req: Request) {
         clinicId,
         userId: session.user.id,
         userName: session.user.name ?? "User",
+        ipAddress: getIp(req),
         action: "TOKEN_ISSUED",
         entityType: "Token",
         entityId: token.id,

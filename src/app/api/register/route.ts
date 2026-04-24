@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
+import { createHash, randomBytes } from "crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { hashPassword } from "@/lib/password";
 import { registerSchema } from "@/lib/validations/auth";
+import { rateLimit, getIp, LIMITS } from "@/lib/rate-limit";
+import { sendEmail, verifyEmailTemplate } from "@/lib/email";
+import { runAfterResponse } from "@/lib/background";
 
 const TRIAL_DAYS = 10;
 
@@ -26,7 +31,31 @@ async function uniqueSlug(base: string): Promise<string> {
   return `${root}-${Date.now().toString(36)}`;
 }
 
+function hashToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
+}
+
 export async function POST(req: Request) {
+  // Public endpoint; throttle to slow down signup-spray abuse.
+  const ip = getIp(req);
+  const gate = rateLimit(
+    `register:${ip}`,
+    LIMITS.REGISTRATIONS_PER_HOUR.max,
+    LIMITS.REGISTRATIONS_PER_HOUR.windowMs,
+  );
+  if (!gate.ok) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Too many registrations from this IP. Try again later.",
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(gate.retryAfterSec) },
+      },
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -60,19 +89,8 @@ export async function POST(req: Request) {
     specialization,
     qualification,
     consultationFee,
+    acceptTerms,
   } = parsed.data;
-
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return NextResponse.json(
-      {
-        success: false,
-        error: "An account with this email already exists",
-        field: "email",
-      },
-      { status: 409 },
-    );
-  }
 
   const proPlan = await prisma.plan.findUnique({ where: { name: "PRO" } });
   if (!proPlan) {
@@ -89,71 +107,118 @@ export async function POST(req: Request) {
   const slug = await uniqueSlug(clinicName);
   const trialEndsAt = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000);
 
-  const { user, clinic } = await prisma.$transaction(async (tx) => {
-    const createdUser = await tx.user.create({
-      data: {
-        name,
-        email,
-        phone: phone || null,
-        password: hashed,
-        role: "OWNER",
-      },
-    });
-    const createdClinic = await tx.clinic.create({
-      data: {
-        name: clinicName,
-        slug,
-        phone: phone || null,
-        ownerId: createdUser.id,
-        planId: proPlan.id,
-        trialEndsAt,
-        settings: {
-          timezone: "Asia/Karachi",
-          language: "en",
-          tokenResetTime: "00:00",
-          currency: "PKR",
-        },
-      },
-    });
-    const linked = await tx.user.update({
-      where: { id: createdUser.id },
-      data: { clinicId: createdClinic.id },
-    });
-    await tx.subscription.create({
-      data: {
-        clinicId: createdClinic.id,
-        planId: proPlan.id,
-        status: "trialing",
-        currentPeriodEnd: trialEndsAt,
-      },
-    });
+  // 48 bytes of entropy; stored as a SHA-256 hash so even DB compromise
+  // doesn't expose usable links.
+  const verifyToken = randomBytes(32).toString("hex");
+  const verifyTokenHash = hashToken(verifyToken);
 
-    // If the owner is also a practicing doctor, create their Doctor profile
-    if (isDoctor && specialization && consultationFee !== undefined) {
-      await tx.doctor.create({
+  let user: { id: string } | null = null;
+  let clinic: { id: string; slug: string } | null = null;
+
+  try {
+    const tx = await prisma.$transaction(async (tx) => {
+      const createdUser = await tx.user.create({
         data: {
-          clinicId: createdClinic.id,
-          userId: linked.id,
-          specialization,
-          qualification: qualification || "—",
-          consultationFee,
-          schedule: {},
-          isAvailable: true,
-          status: "AVAILABLE",
+          name,
+          email,
+          phone: phone || null,
+          password: hashed,
+          role: "OWNER",
+          // isActive stays false until email verification — auth.ts
+          // rejects the credentials attempt otherwise.
+          isActive: false,
+          emailVerifyTokenHash: verifyTokenHash,
+          acceptedTermsAt: acceptTerms ? new Date() : null,
         },
       });
-    }
+      const createdClinic = await tx.clinic.create({
+        data: {
+          name: clinicName,
+          slug,
+          phone: phone || null,
+          ownerId: createdUser.id,
+          planId: proPlan.id,
+          trialEndsAt,
+          settings: {
+            timezone: "Asia/Karachi",
+            language: "en",
+            tokenResetTime: "00:00",
+            currency: "PKR",
+          },
+        },
+      });
+      const linked = await tx.user.update({
+        where: { id: createdUser.id },
+        data: { clinicId: createdClinic.id },
+      });
+      await tx.subscription.create({
+        data: {
+          clinicId: createdClinic.id,
+          planId: proPlan.id,
+          status: "trialing",
+          currentPeriodEnd: trialEndsAt,
+        },
+      });
 
-    return { user: linked, clinic: createdClinic };
+      if (isDoctor && specialization && consultationFee !== undefined) {
+        await tx.doctor.create({
+          data: {
+            clinicId: createdClinic.id,
+            userId: linked.id,
+            specialization,
+            qualification: qualification || "—",
+            consultationFee,
+            schedule: {},
+            isAvailable: true,
+            status: "AVAILABLE",
+          },
+        });
+      }
+
+      return { user: linked, clinic: createdClinic };
+    });
+    user = tx.user;
+    clinic = tx.clinic;
+  } catch (err) {
+    // Catch the unique-email race — two signups for the same address hit
+    // the DB at the same moment and the second one would otherwise blow
+    // up as a 500.
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      err.code === "P2002"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "An account with this email already exists",
+          field: "email",
+        },
+        { status: 409 },
+      );
+    }
+    throw err;
+  }
+
+  // Send verification email in the background — any Resend hiccup must
+  // not leak timing info about whether the email already existed.
+  const origin =
+    req.headers.get("origin") ??
+    process.env.NEXTAUTH_URL ??
+    "http://localhost:3000";
+  const verifyUrl = `${origin}/verify-email?token=${verifyToken}`;
+  runAfterResponse(async () => {
+    const tmpl = verifyEmailTemplate(verifyUrl, name);
+    await sendEmail({ to: email, ...tmpl });
   });
 
   return NextResponse.json({
     success: true,
     data: {
-      userId: user.id,
-      clinicId: clinic.id,
-      clinicSlug: clinic.slug,
+      userId: user!.id,
+      clinicId: clinic!.id,
+      clinicSlug: clinic!.slug,
       trialEndsAt: trialEndsAt.toISOString(),
+      needsVerification: true,
     },
   });
 }

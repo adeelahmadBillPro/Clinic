@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import bcrypt from "bcryptjs";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import {
   profileSchema,
   passwordChangeSchema,
@@ -100,8 +100,14 @@ export async function PATCH(req: Request) {
       where: { userId: session.user.id },
     });
     if (existing) {
-      await prisma.doctor.update({
-        where: { id: existing.id },
+      // Tenant + self predicate so a forged doctor id can't touch
+      // another user's profile.
+      await prisma.doctor.updateMany({
+        where: {
+          id: existing.id,
+          clinicId: session.user.clinicId,
+          userId: session.user.id,
+        },
         data: {
           specialization: data.specialization || existing.specialization,
           qualification: data.qualification || existing.qualification,
@@ -170,7 +176,10 @@ export async function PUT(req: Request) {
     return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
   }
 
-  const ok = await bcrypt.compare(currentPassword, user.password);
+  // Use the shared helpers so rounds stay consistent (BCRYPT_ROUNDS = 12
+  // in src/lib/password.ts). Previously this file used rounds=10, giving
+  // different password costs depending on which codepath hashed them.
+  const ok = await verifyPassword(currentPassword, user.password);
   if (!ok) {
     return NextResponse.json(
       { success: false, error: "Current password is incorrect" },
@@ -178,7 +187,7 @@ export async function PUT(req: Request) {
     );
   }
 
-  const hashed = await bcrypt.hash(newPassword, 10);
+  const hashed = await hashPassword(newPassword);
   await prisma.user.update({
     where: { id: user.id },
     data: { password: hashed },

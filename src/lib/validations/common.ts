@@ -37,14 +37,18 @@ export const optionalPhoneSchema = z
   .optional()
   .or(z.literal(""));
 
-/** Human name — 2+ chars, letters / dot / apostrophe / hyphen / space. */
+/**
+ * Human name — 2+ chars, letters (any script) / marks / dot / apostrophe
+ * / hyphen / space. `\p{L}` and `\p{M}` accept Arabic / Urdu / Hindi /
+ * accented European names that the old ASCII-only regex rejected.
+ */
 export const nameSchema = z
   .string()
   .trim()
   .min(2, "At least 2 characters")
   .max(100, "Too long (max 100)")
   .regex(
-    /^[a-zA-Z.\-'’ ]+$/,
+    /^[\p{L}\p{M}.\-'’ ]+$/u,
     "Letters, spaces, dot and hyphen only",
   );
 

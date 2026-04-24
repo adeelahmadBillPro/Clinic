@@ -1,11 +1,17 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { db } from "@/lib/tenant-db";
 import { saveConsultationSchema } from "@/lib/validations/consultation";
 import { prisma } from "@/lib/prisma";
+import { requireApiRole } from "@/lib/api-guards";
+import { nextSequence, pad } from "@/lib/counter";
+import { getIp } from "@/lib/utils";
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Writing a consultation is clinical work: doctor (the author) and
+  // admins (for corrections). Never reception / pharmacist.
+  const gate = await requireApiRole(["DOCTOR", "OWNER", "ADMIN"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
@@ -44,6 +50,32 @@ export async function POST(req: Request) {
       { success: false, error: "Token not found" },
       { status: 404 },
     );
+  }
+
+  // Any medicine linked in the prescription must belong to this clinic —
+  // otherwise pharmacy could end up dispensing another clinic's stock.
+  if (input.medicines?.length) {
+    const linked = input.medicines
+      .map((m) => m.medicineId)
+      .filter((x): x is string => !!x);
+    if (linked.length) {
+      const found = await t.medicine.findMany({
+        where: { id: { in: linked } },
+        select: { id: true },
+      });
+      const foundIds = new Set(found.map((m) => m.id));
+      const missing = linked.find((id) => !foundIds.has(id));
+      if (missing) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "One of the selected medicines is not in this clinic",
+            field: "medicines",
+          },
+          { status: 400 },
+        );
+      }
+    }
   }
 
   // Upsert consultation for this token
@@ -91,12 +123,20 @@ export async function POST(req: Request) {
       });
     }
 
-    // Vitals
+    // Vitals — schema bounds keep impossible values out, but guard the
+    // BMI formula too: divide-by-near-zero on height < 30cm would produce
+    // nonsense, and weight of 0 would yield 0.
     if (input.vitals && Object.keys(input.vitals).length > 0) {
       const v = input.vitals;
+      const heightM =
+        typeof v.height === "number" && v.height > 50
+          ? Number(v.height) / 100
+          : null;
+      const weightKg =
+        typeof v.weight === "number" && v.weight > 0.5 ? Number(v.weight) : null;
       const bmi =
-        v.weight && v.height
-          ? Number((Number(v.weight) / Math.pow(Number(v.height) / 100, 2)).toFixed(1))
+        heightM && weightKg
+          ? Number((weightKg / (heightM * heightM)).toFixed(1))
           : null;
       await tx.vitalSigns.create({
         data: {
@@ -133,19 +173,11 @@ export async function POST(req: Request) {
       });
       prescriptionId = prescription.id;
 
-      // Also seed a pending pharmacy order so pharmacy sees it
+      // Also seed a pending pharmacy order so pharmacy sees it. Counter
+      // runs inside the same tx to keep sequence + write atomic.
       const year = new Date().getFullYear();
-      const lastOrder = await tx.pharmacyOrder.findFirst({
-        where: { clinicId, orderNumber: { startsWith: `PH-${year}-` } },
-        orderBy: { orderNumber: "desc" },
-        select: { orderNumber: true },
-      });
-      let nextNum = 1;
-      if (lastOrder?.orderNumber) {
-        const match = lastOrder.orderNumber.match(/-(\d+)$/);
-        if (match) nextNum = parseInt(match[1], 10) + 1;
-      }
-      const orderNumber = `PH-${year}-${String(nextNum).padStart(4, "0")}`;
+      const seq = await nextSequence(clinicId, "PH", tx, year);
+      const orderNumber = `PH-${year}-${pad(seq, 4)}`;
 
       const items = input.medicines.map((m) => ({
         medicineId: m.medicineId ?? null,
@@ -194,6 +226,7 @@ export async function POST(req: Request) {
         clinicId,
         userId: session.user.id,
         userName: session.user.name ?? "User",
+        ipAddress: getIp(req),
         action: input.complete
           ? "CONSULTATION_CREATED"
           : "CONSULTATION_UPDATED",

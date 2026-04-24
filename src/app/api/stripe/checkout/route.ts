@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { stripe } from "@/lib/stripe";
 import { z } from "zod";
+import { requireApiRole } from "@/lib/api-guards";
 
 const schema = z.object({
   planName: z.enum(["BASIC", "STANDARD", "PRO"]),
@@ -10,7 +10,11 @@ const schema = z.object({
 });
 
 export async function POST(req: Request) {
-  const session = await auth();
+  // Checkout sessions mutate billing — OWNER only (the person who signs
+  // cheques). ADMIN roles manage clinic ops but don't approve spend.
+  const gate = await requireApiRole(["OWNER"]);
+  if (gate instanceof NextResponse) return gate;
+  const session = gate;
   if (!session?.user?.clinicId) {
     return NextResponse.json(
       { success: false, error: "Not authenticated" },
