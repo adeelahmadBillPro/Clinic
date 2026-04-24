@@ -7,6 +7,7 @@ import { TopBar } from "@/components/shared/TopBar";
 import { TrialBanner } from "@/components/shared/TrialBanner";
 import { SidebarUser } from "@/components/shared/SidebarUser";
 import { AccessDeniedToast } from "@/components/shared/AccessDeniedToast";
+import { ScrollToTopDashboard } from "@/components/shared/ScrollToTopDashboard";
 import { Suspense } from "react";
 import { cn } from "@/lib/utils";
 
@@ -71,6 +72,7 @@ export default async function DashboardLayout({
       </div>
 
       <MobileBottomNav role={session.user.role} />
+      <ScrollToTopDashboard />
     </div>
   );
 }

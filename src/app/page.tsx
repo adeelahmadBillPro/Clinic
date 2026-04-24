@@ -14,6 +14,7 @@ import { LandingTestimonials } from "@/components/landing/LandingTestimonials";
 import { LandingFaq } from "@/components/landing/LandingFaq";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 import { LandingCta } from "@/components/landing/LandingCta";
+import { ScrollToTop } from "@/components/shared/ScrollToTop";
 
 export default async function Home() {
   const session = await auth();
@@ -65,6 +66,7 @@ export default async function Home() {
       </main>
 
       <LandingFooter />
+      <ScrollToTop />
     </div>
   );
 }
