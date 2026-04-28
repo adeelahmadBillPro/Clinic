@@ -31,8 +31,8 @@ export default async function AnalyticsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Analytics</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Last 30 days · Revenue mix, patient volume, doctor load, and peak
-          hours.
+          Trends, revenue, patients seen, top doctors.{" "}
+          <span className="text-foreground/70">Last 30 days.</span>
         </p>
       </div>
       <AnalyticsDashboard

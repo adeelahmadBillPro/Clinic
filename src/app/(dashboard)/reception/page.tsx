@@ -3,6 +3,7 @@ import { db } from "@/lib/tenant-db";
 import { prisma } from "@/lib/prisma";
 import { ReceptionScreen } from "@/components/reception/ReceptionScreen";
 import { MyDayCard } from "@/components/shared/MyDayCard";
+import { RoleHeader } from "@/components/shared/RoleHeader";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "OPD — ClinicOS" };
@@ -73,6 +74,12 @@ export default async function ReceptionPage() {
 
   return (
     <div className="space-y-5">
+      <RoleHeader
+        title="OPD reception"
+        subtitle="Register patients, issue tokens and collect fees."
+        userName={session.user.name ?? "there"}
+        role={session.user.role}
+      />
       <MyDayCard />
       <ReceptionScreen
         initialDoctors={initialDoctors}

@@ -15,9 +15,11 @@ export default async function PrescriptionPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  // P3-44: role gate
+  // P3-44: role gate. Reception is included so they can reprint a
+  // prescription when a patient comes back saying "slip kho gai" — the
+  // print view itself is read-only.
   const session = await requireRole(
-    ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST"],
+    ["OWNER", "ADMIN", "DOCTOR", "PHARMACIST", "RECEPTIONIST"],
     "/prescriptions/[id]",
   );
 

@@ -85,7 +85,12 @@ export function ConsultationPanel({
   const [referOpen, setReferOpen] = useState(false);
   const [outstanding, setOutstanding] = useState<number | null>(null);
 
-  // Reset form when token changes
+  const isEditingCompleted = token.status === "COMPLETED";
+
+  // Reset form when token changes; if the token is COMPLETED (doctor
+  // re-opened it from "Today's completed" to amend), prefill from the
+  // existing consultation/vitals/prescription so they can edit instead
+  // of starting blank.
   useEffect(() => {
     setBp("");
     setPulse("");
@@ -102,7 +107,49 @@ export function ConsultationPanel({
     setMedicines([]);
     setPrescriptionNotes("");
     setFollowUpDate("");
-  }, [token.id, token.chiefComplaint]);
+
+    if (!isEditingCompleted) return;
+    let aborted = false;
+    fetch(`/api/consultations?tokenId=${token.id}`)
+      .then((r) => r.json())
+      .then((body) => {
+        if (aborted || !body?.success || !body.data) return;
+        const c = body.data;
+        if (c.subjective) setSubjective(c.subjective);
+        if (c.objective) setObjective(c.objective);
+        if (c.assessment) setAssessment(c.assessment);
+        if (c.plan) setPlanText(c.plan);
+        if (Array.isArray(c.diagnosisCodes)) {
+          setDiagnoses(c.diagnosisCodes as DiagnosisItem[]);
+        }
+        if (c.followUpDate) {
+          setFollowUpDate(String(c.followUpDate).slice(0, 10));
+        }
+        if (c.vitals) {
+          setBp(c.vitals.bp ?? "");
+          setPulse(c.vitals.pulse != null ? String(c.vitals.pulse) : "");
+          setTemperature(
+            c.vitals.temperature != null ? String(c.vitals.temperature) : "",
+          );
+          setWeight(c.vitals.weight != null ? String(c.vitals.weight) : "");
+          setHeight(c.vitals.height != null ? String(c.vitals.height) : "");
+          setSpO2(c.vitals.spO2 != null ? String(c.vitals.spO2) : "");
+          setBloodSugar(
+            c.vitals.bloodSugar != null ? String(c.vitals.bloodSugar) : "",
+          );
+        }
+        if (c.prescription?.medicines) {
+          setMedicines(c.prescription.medicines as MedicineItem[]);
+        }
+        if (c.prescription?.notes) {
+          setPrescriptionNotes(c.prescription.notes);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      aborted = true;
+    };
+  }, [token.id, token.chiefComplaint, isEditingCompleted]);
 
   // Fetch fee/outstanding status for the current patient
   useEffect(() => {
@@ -288,23 +335,48 @@ export function ConsultationPanel({
         </div>
       )}
 
+      {isEditingCompleted && (
+        <div className="mb-3 flex items-start gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-[12px] leading-relaxed text-emerald-900 dark:text-emerald-200">
+          <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+          <span>
+            <span className="font-semibold">Editing completed consultation.</span>{" "}
+            Update vitals, notes or medicines and press{" "}
+            <em className="font-medium">Save changes</em>. No new token will be
+            issued — you&rsquo;re amending the existing record.
+          </span>
+        </div>
+      )}
+
+      {/* Step-by-step guide banner so a new doctor knows the consultation
+          flow at a glance. Each tab is a stage; doctor can leave any
+          section blank and still save. */}
+      <div className="mb-3 rounded-lg border border-dashed border-primary/25 bg-primary/5 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">
+        <span className="font-semibold text-primary">Consultation flow:</span>{" "}
+        <span className="font-medium text-foreground">1. Vitals</span> →{" "}
+        <span className="font-medium text-foreground">2. SOAP notes</span> →{" "}
+        <span className="font-medium text-foreground">3. Diagnosis</span> →{" "}
+        <span className="font-medium text-foreground">4. Prescription</span>{" "}
+        → press <em className="font-medium text-foreground">Save &amp; complete</em>{" "}
+        at the bottom. Any section can be left blank.
+      </div>
+
       <Tabs defaultValue="vitals">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="vitals" className="gap-1.5">
+          <TabsTrigger value="vitals" className="gap-1.5 text-xs sm:text-sm">
             <ActivitySquare className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Vitals</span>
+            <span>Vitals</span>
           </TabsTrigger>
-          <TabsTrigger value="soap" className="gap-1.5">
+          <TabsTrigger value="soap" className="gap-1.5 text-xs sm:text-sm">
             <ClipboardPen className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">SOAP</span>
+            <span>SOAP</span>
           </TabsTrigger>
-          <TabsTrigger value="diagnosis" className="gap-1.5">
+          <TabsTrigger value="diagnosis" className="gap-1.5 text-xs sm:text-sm">
             <ScanSearch className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Diagnosis</span>
+            <span>Diagnosis</span>
           </TabsTrigger>
-          <TabsTrigger value="prescription" className="gap-1.5">
+          <TabsTrigger value="prescription" className="gap-1.5 text-xs sm:text-sm">
             <Pill className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Prescription</span>
+            <span>Prescription</span>
             {medicines.length > 0 && (
               <Badge variant="secondary" className="ml-1 text-[10px]">
                 {medicines.length}
@@ -314,19 +386,70 @@ export function ConsultationPanel({
         </TabsList>
 
         <TabsContent value="vitals" className="mt-4 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Record what you measured today. Fields marked{" "}
+            <span className="font-semibold text-destructive">*</span> are
+            standard for every patient — others are optional. Use °C for
+            temperature (37 normal), kg for weight, cm for height.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <VField label="BP (mmHg)" placeholder="120/80" value={bp} onChange={setBp} />
-            <VField label="Pulse (bpm)" placeholder="72" value={pulse} onChange={setPulse} type="number" />
-            <VField label="Temp (°C)" placeholder="36.8" value={temperature} onChange={setTemperature} type="number" />
-            <VField label="Weight (kg)" placeholder="72" value={weight} onChange={setWeight} type="number" />
-            <VField label="Height (cm)" placeholder="170" value={height} onChange={setHeight} type="number" />
-            <VField label="SpO₂ (%)" placeholder="98" value={spO2} onChange={setSpO2} type="number" />
+            <VField
+              label="BP (mmHg)"
+              placeholder="120/80"
+              value={bp}
+              onChange={setBp}
+              recommended
+              range="120/80 format"
+            />
+            <VField
+              label="Pulse (bpm)"
+              placeholder="72"
+              value={pulse}
+              onChange={setPulse}
+              type="number"
+              recommended
+              range="60–100 bpm in adults"
+            />
+            <VField
+              label="Temp (°C)"
+              placeholder="36.8"
+              value={temperature}
+              onChange={setTemperature}
+              type="number"
+              recommended
+              range="36–37.5 °C normal (Celsius)"
+            />
+            <VField
+              label="Weight (kg)"
+              placeholder="72"
+              value={weight}
+              onChange={setWeight}
+              type="number"
+              range="kg"
+            />
+            <VField
+              label="Height (cm)"
+              placeholder="170"
+              value={height}
+              onChange={setHeight}
+              type="number"
+              range="cm (170 = adult)"
+            />
+            <VField
+              label="SpO₂ (%)"
+              placeholder="98"
+              value={spO2}
+              onChange={setSpO2}
+              type="number"
+              range="95–100% normal"
+            />
             <VField
               label="Blood sugar (mg/dL)"
               placeholder="110"
               value={bloodSugar}
               onChange={setBloodSugar}
               type="number"
+              range="70–140 mg/dL fasting"
             />
             {bmi && (
               <div className="flex flex-col justify-end text-xs text-muted-foreground">
@@ -341,6 +464,11 @@ export function ConsultationPanel({
         </TabsContent>
 
         <TabsContent value="soap" className="mt-4 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Standard clinical note. Fields marked{" "}
+            <span className="font-semibold text-destructive">*</span> are
+            recommended for every consultation — others are optional.
+          </p>
           <SField
             label="Subjective"
             helper="Patient-reported symptoms, history"
@@ -358,20 +486,33 @@ export function ConsultationPanel({
             helper="Clinical impression, differential diagnoses"
             value={assessment}
             onChange={setAssessment}
+            recommended
           />
           <SField
             label="Plan"
             helper="Treatment plan, tests ordered, follow-up"
             value={planText}
             onChange={setPlanText}
+            recommended
           />
         </TabsContent>
 
-        <TabsContent value="diagnosis" className="mt-4">
+        <TabsContent value="diagnosis" className="mt-4 space-y-3">
+          <p className="text-xs text-muted-foreground">
+            Pick from the ICD-10 list (search by code or symptom) or type any
+            custom diagnosis below and click <strong>Add</strong>. Multiple
+            diagnoses are fine.
+          </p>
           <DiagnosisInput value={diagnoses} onChange={setDiagnoses} />
         </TabsContent>
 
         <TabsContent value="prescription" className="mt-4 space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Search inventory for medicines (auto-fills price + stock), or
+            type a name not in stock and press <strong>Enter</strong> /
+            click <strong>Add</strong>. Use a preset (Flu, Hypertension)
+            for common combos. Set frequency / duration per medicine.
+          </p>
           <PrescriptionBuilder
             value={medicines}
             onChange={setMedicines}
@@ -416,46 +557,67 @@ export function ConsultationPanel({
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => save(false)}
-            disabled={saving}
-          >
-            {saving ? (
-              <>
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Saving
-              </>
-            ) : (
-              <>
-                <Send className="mr-1.5 h-3.5 w-3.5" />
-                Save draft
-              </>
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setReferOpen(true)}
-            disabled={saving || completing}
-          >
-            <UserCog className="mr-1.5 h-3.5 w-3.5" />
-            Refer to doctor
-          </Button>
-          <Button onClick={() => save(true)} disabled={completing} size="sm">
-            {completing ? (
-              <>
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                Completing
-              </>
-            ) : (
-              <>
-                <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
-                Complete consultation
-              </>
-            )}
-          </Button>
+          {isEditingCompleted ? (
+            // Editing a previously completed consultation. The token is
+            // already COMPLETED — we just save changes (vitals, notes,
+            // medicines) without re-issuing or re-completing.
+            <Button onClick={() => save(false)} disabled={saving} size="sm">
+              {saving ? (
+                <>
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  Saving
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                  Save changes
+                </>
+              )}
+            </Button>
+          ) : (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => save(false)}
+                disabled={saving}
+              >
+                {saving ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Saving
+                  </>
+                ) : (
+                  <>
+                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                    Save draft
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setReferOpen(true)}
+                disabled={saving || completing}
+              >
+                <UserCog className="mr-1.5 h-3.5 w-3.5" />
+                Refer to doctor
+              </Button>
+              <Button onClick={() => save(true)} disabled={completing} size="sm">
+                {completing ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Completing
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" />
+                    Complete consultation
+                  </>
+                )}
+              </Button>
+            </>
+          )}
         </div>
       </div>
       {referOpen && token.doctor && patient && (
@@ -480,16 +642,31 @@ function VField({
   value,
   onChange,
   type = "text",
+  recommended = false,
+  range,
 }: {
   label: string;
   placeholder: string;
   value: string;
   onChange: (v: string) => void;
   type?: string;
+  recommended?: boolean;
+  /** Inline hint shown under the field — guidance only, not enforced. */
+  range?: string;
 }) {
   return (
     <div>
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Label className="text-xs text-muted-foreground">
+        {label}
+        {recommended && (
+          <span
+            className="ml-1 text-destructive"
+            title="Recommended — typically recorded for every patient"
+          >
+            *
+          </span>
+        )}
+      </Label>
       <Input
         type={type}
         value={value}
@@ -497,6 +674,11 @@ function VField({
         placeholder={placeholder}
         className="mt-1"
       />
+      {range && (
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Typical: {range}
+        </p>
+      )}
     </div>
   );
 }
@@ -506,16 +688,28 @@ function SField({
   helper,
   value,
   onChange,
+  recommended = false,
 }: {
   label: string;
   helper: string;
   value: string;
   onChange: (v: string) => void;
+  recommended?: boolean;
 }) {
   return (
     <div>
       <div className="mb-1 flex items-baseline justify-between">
-        <Label className="text-sm font-medium">{label}</Label>
+        <Label className="text-sm font-medium">
+          {label}
+          {recommended && (
+            <span
+              className="ml-1 text-destructive"
+              title="Recommended — typically recorded for every consultation"
+            >
+              *
+            </span>
+          )}
+        </Label>
         <span className="text-[11px] text-muted-foreground">{helper}</span>
       </div>
       <Textarea

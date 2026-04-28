@@ -5,6 +5,79 @@ import { prisma } from "@/lib/prisma";
 import { requireApiRole } from "@/lib/api-guards";
 import { nextSequence, pad } from "@/lib/counter";
 import { getIp } from "@/lib/utils";
+import { auth } from "@/auth";
+
+// Fetch the existing consultation for a token (used when a doctor reopens
+// a COMPLETED token to amend medicines / notes — see DoctorDesk "Today's
+// completed" list).
+export async function GET(req: Request) {
+  const session = await auth();
+  if (!session?.user?.clinicId) {
+    return NextResponse.json(
+      { success: false, error: "Not authenticated" },
+      { status: 401 },
+    );
+  }
+
+  const url = new URL(req.url);
+  const tokenId = url.searchParams.get("tokenId");
+  if (!tokenId) {
+    return NextResponse.json(
+      { success: false, error: "tokenId required" },
+      { status: 400 },
+    );
+  }
+
+  const t = db(session.user.clinicId);
+  const consultation = await t.consultation.findFirst({
+    where: { tokenId },
+  });
+  if (!consultation) {
+    return NextResponse.json({ success: true, data: null });
+  }
+
+  const [vitals, prescription] = await Promise.all([
+    t.vitalSigns.findFirst({
+      where: { consultationId: consultation.id },
+      orderBy: { recordedAt: "desc" },
+    }),
+    t.prescription.findFirst({
+      where: { consultationId: consultation.id },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
+
+  return NextResponse.json({
+    success: true,
+    data: {
+      id: consultation.id,
+      subjective: consultation.subjective,
+      objective: consultation.objective,
+      assessment: consultation.assessment,
+      plan: consultation.plan,
+      diagnosisCodes: consultation.diagnosisCodes,
+      followUpDate: consultation.followUpDate?.toISOString() ?? null,
+      followUpNotes: consultation.followUpNotes,
+      vitals: vitals
+        ? {
+            bp: vitals.bp,
+            pulse: vitals.pulse,
+            temperature: vitals.temperature ? Number(vitals.temperature) : null,
+            weight: vitals.weight ? Number(vitals.weight) : null,
+            height: vitals.height ? Number(vitals.height) : null,
+            spO2: vitals.spO2,
+            bloodSugar: vitals.bloodSugar ? Number(vitals.bloodSugar) : null,
+          }
+        : null,
+      prescription: prescription
+        ? {
+            medicines: prescription.medicines,
+            notes: prescription.notes,
+          }
+        : null,
+    },
+  });
+}
 
 export async function POST(req: Request) {
   // Writing a consultation is clinical work: doctor (the author) and

@@ -30,11 +30,13 @@ import {
 } from "@/components/ui/select";
 import { PasswordInput } from "@/components/shared/PasswordInput";
 import { PhoneInput } from "@/components/shared/PhoneInput";
+import { FieldHelp } from "@/components/shared/FieldHelp";
 import { StaffCreatedDialog } from "./StaffCreatedDialog";
 import {
   addStaffSchema,
   type AddStaffInput,
 } from "@/lib/validations/staff";
+import { useEnterTabsForward } from "@/lib/hooks/useEnterTabsForward";
 import { cn } from "@/lib/utils";
 
 const ROLES = [
@@ -83,6 +85,44 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
   });
 
   const role = watch("role");
+
+  // Auto-suggest the next R-NNN room when the doctor section opens. Only
+  // fires while the field is empty so we don't overwrite a value the
+  // admin already typed. Server endpoint scans existing doctors and
+  // returns max(R-NNN) + 1; falls back to R-101.
+  useEffect(() => {
+    if (!open || role !== "DOCTOR") return;
+    const current = watch("roomNumber");
+    if (current && current.trim()) return;
+    let aborted = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/staff/next-room");
+        const body = await res.json().catch(() => ({}));
+        if (aborted) return;
+        if (res.ok && body?.success && body.data?.suggestion) {
+          // Only fill if user still hasn't typed anything in the meantime.
+          const stillEmpty = !watch("roomNumber")?.trim();
+          if (stillEmpty) {
+            setValue("roomNumber", body.data.suggestion, {
+              shouldValidate: false,
+              shouldDirty: false,
+            });
+          }
+        }
+      } catch {
+        // Silent fail — admin can always type manually.
+      }
+    })();
+    return () => {
+      aborted = true;
+    };
+    // We intentionally exclude `watch` and `setValue` from deps —
+    // they're stable refs from react-hook-form.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, role]);
+
+  const handleEnterTab = useEnterTabsForward();
 
   async function onSubmit(values: AddStaffInput) {
     setSubmitting(true);
@@ -147,6 +187,7 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
 
         <form
           onSubmit={handleSubmit(onSubmit)}
+          onKeyDown={handleEnterTab}
           noValidate
           className="space-y-4"
         >
@@ -321,7 +362,14 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
                 </div>
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div>
-                    <Label htmlFor="roomNumber">Room #</Label>
+                    <Label htmlFor="roomNumber">
+                      Room #
+                      <FieldHelp>
+                        Which consulting room this doctor uses. Auto-suggested
+                        but you can override. Two doctors can&rsquo;t share a
+                        room.
+                      </FieldHelp>
+                    </Label>
                     <Input
                       id="roomNumber"
                       className="mt-1.5"
@@ -330,7 +378,13 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="consultationFee">Fee (₨)</Label>
+                    <Label htmlFor="consultationFee">
+                      Fee (₨)
+                      <FieldHelp>
+                        How much you charge a patient per visit. Used to
+                        auto-generate the OPD bill when a token is issued.
+                      </FieldHelp>
+                    </Label>
                     <Input
                       id="consultationFee"
                       type="number"
@@ -348,7 +402,14 @@ export function AddStaffTrigger({ autoOpen }: { autoOpen?: boolean }) {
                     )}
                   </div>
                   <div>
-                    <Label htmlFor="revenueSharePct">Revenue %</Label>
+                    <Label htmlFor="revenueSharePct">
+                      Revenue %
+                      <FieldHelp>
+                        Doctor&rsquo;s cut of the OPD bill (and any pharmacy
+                        bill linked to their prescription). 0 means salaried —
+                        they take no per-visit share.
+                      </FieldHelp>
+                    </Label>
                     <Input
                       id="revenueSharePct"
                       type="number"

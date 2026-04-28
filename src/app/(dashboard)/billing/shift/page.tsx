@@ -48,7 +48,7 @@ export default async function CashShiftsPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Cash shifts</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Declare your end-of-shift cash handover.
+          Open and close cash shifts. Reconcile end-of-day cash.
         </p>
       </div>
       <CashShiftsClient

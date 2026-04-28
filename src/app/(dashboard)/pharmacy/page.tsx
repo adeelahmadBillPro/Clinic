@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/require-role";
 import { PharmacyQueue } from "@/components/pharmacy/PharmacyQueue";
 import { MyDayCard } from "@/components/shared/MyDayCard";
+import { RoleHeader } from "@/components/shared/RoleHeader";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Pharmacy — ClinicOS" };
@@ -11,16 +12,14 @@ export default async function PharmacyPage() {
     ["OWNER", "ADMIN", "PHARMACIST"],
     "/pharmacy",
   );
-  void session;
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Pharmacy</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Incoming prescriptions from doctors. Dispense, partial-dispense, or
-          hold.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <RoleHeader
+        title="Pharmacy"
+        subtitle="Dispense prescriptions and collect payment."
+        userName={session.user.name ?? "there"}
+        role={session.user.role}
+      />
       <MyDayCard />
       <PharmacyQueue />
     </div>

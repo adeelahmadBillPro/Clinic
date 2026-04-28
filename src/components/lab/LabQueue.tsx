@@ -2,7 +2,8 @@
 
 import { useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, RefreshCcw, Plus } from "lucide-react";
+import { Loader2, RefreshCcw, Plus, FlaskConical } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Tabs,
   TabsContent,
@@ -92,9 +93,11 @@ export function LabQueue() {
           </TabsList>
           <TabsContent value={tab} className="mt-3">
             {orders.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                No orders in this view.
-              </div>
+              <EmptyState
+                icon={FlaskConical}
+                title="No lab orders"
+                description="Orders from doctors will land here. You can also create one manually with the New order button."
+              />
             ) : (
               <motion.ul
                 className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"

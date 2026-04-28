@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+
+import { inferGenderFromName } from "@/lib/gender-from-name";
+import { useEnterTabsForward } from "@/lib/hooks/useEnterTabsForward";
 
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { TagInput } from "./TagInput";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { PhoneInput } from "@/components/shared/PhoneInput";
+import { FieldHelp } from "@/components/shared/FieldHelp";
 import {
   createPatientSchema,
   type CreatePatientInput,
@@ -101,6 +105,7 @@ export function RegisterPatientForm({
     handleSubmit,
     control,
     watch,
+    setValue,
     setError,
     formState: { errors },
   } = useForm<CreatePatientInput>({
@@ -121,6 +126,22 @@ export function RegisterPatientForm({
 
   const dobValue = watch("dob");
   const ageLabel = computeAgeLabel(dobValue);
+
+  // Auto-detect gender from the typed name (Mr/Mrs prefix or known PK
+  // first name). The instant the receptionist clicks a gender radio
+  // we lock it — no surprise overrides while they're filling the form.
+  // Reset when the form clears (after a successful submit) so the next
+  // patient gets fresh detection again.
+  const genderManuallySet = useRef(false);
+  const nameValue = watch("name");
+  useEffect(() => {
+    if (genderManuallySet.current) return;
+    const guess = inferGenderFromName(nameValue ?? "");
+    if (guess) {
+      setValue("gender", guess, { shouldValidate: false });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nameValue]);
 
   async function submit(values: CreatePatientInput, forceCreate = false) {
     setSubmitting(true);
@@ -176,10 +197,13 @@ export function RegisterPatientForm({
     }
   }
 
+  const handleEnterTab = useEnterTabsForward();
+
   return (
     <form
       noValidate
       onSubmit={handleSubmit((v) => submit(v, false))}
+      onKeyDown={handleEnterTab}
       className={cn("space-y-4", compact && "text-sm")}
     >
       <AnimatePresence>
@@ -301,7 +325,12 @@ export function RegisterPatientForm({
             render={({ field }) => (
               <RadioGroup
                 value={field.value}
-                onValueChange={field.onChange}
+                onValueChange={(v) => {
+                  // Lock gender once the user picks themselves — auto-detect
+                  // from name shouldn't override their explicit choice.
+                  genderManuallySet.current = true;
+                  field.onChange(v);
+                }}
                 className="mt-1.5 grid grid-cols-3 gap-1 rounded-lg border bg-muted/40 p-1"
               >
                 {(["M", "F", "Other"] as const).map((g) => (
@@ -350,10 +379,10 @@ export function RegisterPatientForm({
 
       <div>
         <div className="flex items-baseline justify-between">
-          <Label htmlFor="p-dob">
-            Date of birth{" "}
+          <Label htmlFor="p-age">
+            Age{" "}
             <span className="text-xs font-normal text-muted-foreground">
-              (optional · or enter age)
+              (years · or pick date of birth)
             </span>
           </Label>
           {ageLabel && (
@@ -375,18 +404,13 @@ export function RegisterPatientForm({
                   return age >= 0 && age <= 130 ? String(age) : "";
                 })()
               : "";
+            // Reception in PK clinics asks "age?" first, exact DOB rarely.
+            // Age input goes left (primary), DatePicker stays as the
+            // precise option on the right.
             return (
-              <div className="mt-1.5 grid grid-cols-[minmax(0,2fr)_110px] gap-2">
-                <DatePicker
-                  id="p-dob"
-                  value={dobVal}
-                  onChange={field.onChange}
-                  placeholder="Pick date of birth"
-                  disableFuture
-                  fromYear={1900}
-                  toYear={new Date().getFullYear()}
-                />
+              <div className="mt-1.5 grid grid-cols-[110px_minmax(0,2fr)] gap-2">
                 <input
+                  id="p-age"
                   type="number"
                   min={0}
                   max={130}
@@ -407,6 +431,14 @@ export function RegisterPatientForm({
                     field.onChange(iso);
                   }}
                   className="h-9 rounded-lg border border-input bg-transparent px-3 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                />
+                <DatePicker
+                  value={dobVal}
+                  onChange={field.onChange}
+                  placeholder="Pick date of birth (optional)"
+                  disableFuture
+                  fromYear={1900}
+                  toYear={new Date().getFullYear()}
                 />
               </div>
             );
@@ -432,7 +464,13 @@ export function RegisterPatientForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <Label>Known allergies</Label>
+          <Label>
+            Known allergies
+            <FieldHelp>
+              Comma-separated. Shown as a red badge on every screen the
+              patient appears (token board, doctor desk, prescription).
+            </FieldHelp>
+          </Label>
           <Controller
             control={control}
             name="allergies"
@@ -448,7 +486,13 @@ export function RegisterPatientForm({
           />
         </div>
         <div>
-          <Label>Chronic conditions</Label>
+          <Label>
+            Chronic conditions
+            <FieldHelp>
+              Long-term conditions like Diabetes / Hypertension. Doctor
+              sees these on every consultation as a quick reference.
+            </FieldHelp>
+          </Label>
           <Controller
             control={control}
             name="chronicConditions"

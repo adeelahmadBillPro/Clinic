@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
-import { Plus, Trash2, Loader2, Package, Truck, CheckCircle2, Printer, X } from "lucide-react";
+import { Plus, Trash2, Loader2, Package, Truck, CheckCircle2, Printer, X, ClipboardList } from "lucide-react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 import {
   Dialog,
@@ -27,6 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FieldHelp } from "@/components/shared/FieldHelp";
 import { cn } from "@/lib/utils";
 
 type PO = {
@@ -295,6 +297,11 @@ export function PurchaseOrdersClient({
               />
               <Label htmlFor="sendOrdered" className="font-normal">
                 Mark as ORDERED (sent to supplier) immediately
+                <FieldHelp>
+                  DRAFT = saved internally, not yet sent to supplier.
+                  ORDERED = sent. Receive flow only available after
+                  ORDERED.
+                </FieldHelp>
               </Label>
             </div>
 
@@ -318,9 +325,13 @@ export function PurchaseOrdersClient({
       </div>
 
       {initial.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No purchase orders yet.
-        </div>
+        <EmptyState
+          icon={ClipboardList}
+          title="No purchase orders"
+          description="Create a PO to order stock from your suppliers. Received goods automatically increment inventory."
+          actionLabel="Create PO"
+          onAction={() => setOpen(true)}
+        />
       ) : (
         <ul className="space-y-2">
           {initial.map((p) => (

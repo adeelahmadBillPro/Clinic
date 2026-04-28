@@ -153,6 +153,10 @@ export async function POST(req: Request) {
         password: hashed,
         role: data.role,
         clinicId,
+        // Admin-added staff don't go through the self-register email-verify
+        // flow — the admin is implicitly vouching for them. Mark verified
+        // immediately so they can log in with the password the admin set.
+        emailVerifiedAt: new Date(),
       },
     });
 

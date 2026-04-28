@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Plus, Loader2, Phone, Mail, MapPin } from "lucide-react";
+import { Plus, Loader2, Phone, Mail, MapPin, Truck } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { toast } from "sonner";
 import { PhoneInput } from "@/components/shared/PhoneInput";
 
@@ -173,9 +174,13 @@ export function SuppliersClient({ initial }: { initial: Supplier[] }) {
       </div>
 
       {initial.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No suppliers yet.
-        </div>
+        <EmptyState
+          icon={Truck}
+          title="No suppliers yet"
+          description="Add suppliers to speed up purchase orders and keep contact details on hand."
+          actionLabel="Add supplier"
+          onAction={() => setOpen(true)}
+        />
       ) : (
         <motion.ul
           initial="initial"

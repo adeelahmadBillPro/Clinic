@@ -16,11 +16,22 @@ import { PasswordInput } from "@/components/shared/PasswordInput";
 import { SubmitButton } from "@/components/shared/SubmitButton";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { stackContainer, stackItem } from "@/lib/motion";
+import { useEnterTabsForward } from "@/lib/hooks/useEnterTabsForward";
 import { cn } from "@/lib/utils";
 
 function friendlyAuthError(code?: string, raw?: string) {
   if (!code && !raw) return "Something went wrong. Please try again.";
   const message = raw ?? "";
+  // EMAIL_NOT_VERIFIED is its own state — surface the specific prompt
+  // instead of the generic "Invalid email or password", otherwise freshly
+  // registered users have no idea why they can't sign in.
+  if (
+    code === "EMAIL_NOT_VERIFIED" ||
+    message.includes("EMAIL_NOT_VERIFIED") ||
+    message.toLowerCase().includes("verify your email")
+  ) {
+    return "Please verify your email first. Check your inbox for the link.";
+  }
   if (message.includes("LOCKED")) return message.split(":")[1]?.trim() || message;
   if (message.includes("INVALID_CREDENTIALS")) {
     return message.split(":")[1]?.trim() || "Invalid email or password";
@@ -47,6 +58,7 @@ export function LoginForm() {
   const shake = useAnimationControls();
 
   const [submitting, setSubmitting] = useState(false);
+  const handleEnterTab = useEnterTabsForward();
   const [serverError, setServerError] = useState<string | null>(null);
 
   const {
@@ -94,6 +106,7 @@ export function LoginForm() {
     <motion.form
       noValidate
       onSubmit={handleSubmit(onSubmit)}
+      onKeyDown={handleEnterTab}
       variants={{
         shake: { x: [0, -8, 8, -6, 6, -3, 3, 0], transition: { duration: 0.45 } },
       }}

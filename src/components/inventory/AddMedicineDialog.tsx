@@ -25,6 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { FieldHelp } from "@/components/shared/FieldHelp";
 
 const CATEGORIES = [
   "Tablet",
@@ -192,7 +193,13 @@ export function AddMedicineDialog({ onCreated }: { onCreated?: () => void }) {
             />
           </div>
           <div>
-            <Label>Min level (reorder at)</Label>
+            <Label>
+              Min level (reorder at)
+              <FieldHelp>
+                Threshold for the &lsquo;low stock&rsquo; alert. Stock dipping
+                below this turns the row amber on the inventory page.
+              </FieldHelp>
+            </Label>
             <Input
               type="number"
               min={0}
@@ -202,7 +209,13 @@ export function AddMedicineDialog({ onCreated }: { onCreated?: () => void }) {
             />
           </div>
           <div>
-            <Label>Purchase price (₨)</Label>
+            <Label>
+              Purchase price (₨)
+              <FieldHelp>
+                What you paid the supplier. The difference between purchase
+                and sale price is your margin (shown in analytics).
+              </FieldHelp>
+            </Label>
             <Input
               type="number"
               min={0}
@@ -212,7 +225,13 @@ export function AddMedicineDialog({ onCreated }: { onCreated?: () => void }) {
             />
           </div>
           <div>
-            <Label>Sale price (₨)</Label>
+            <Label>
+              Sale price (₨)
+              <FieldHelp>
+                What the patient pays. The difference between sale and
+                purchase price is your margin (shown in analytics).
+              </FieldHelp>
+            </Label>
             <Input
               type="number"
               min={0}
@@ -222,7 +241,14 @@ export function AddMedicineDialog({ onCreated }: { onCreated?: () => void }) {
             />
           </div>
           <div>
-            <Label>Batch number</Label>
+            <Label>
+              Batch number
+              <FieldHelp>
+                Track batches separately when you receive new stock. The
+                pharmacy queue warns about expired or expiring-soon
+                medicines.
+              </FieldHelp>
+            </Label>
             <Input
               value={form.batchNumber}
               onChange={(e) => update("batchNumber", e.target.value)}
@@ -230,7 +256,14 @@ export function AddMedicineDialog({ onCreated }: { onCreated?: () => void }) {
             />
           </div>
           <div>
-            <Label>Expiry date</Label>
+            <Label>
+              Expiry date
+              <FieldHelp>
+                Track batches separately when you receive new stock. The
+                pharmacy queue warns about expired or expiring-soon
+                medicines.
+              </FieldHelp>
+            </Label>
             <Input
               type="date"
               value={form.expiryDate}

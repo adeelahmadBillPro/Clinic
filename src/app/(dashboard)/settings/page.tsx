@@ -25,7 +25,7 @@ export default async function SettingsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Clinic branding, working configuration, and data export.
+            Clinic name, contact info, language, timezone, token reset time.
           </p>
         </div>
         <div className="flex gap-2">

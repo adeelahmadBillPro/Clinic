@@ -228,7 +228,63 @@ export async function GET() {
     });
   }
 
-  // Nurse / Lab — minimal support
+  if (role === "LAB_TECH") {
+    const [pendingSamples, inProgress, completedToday, ordersToday] =
+      await Promise.all([
+        t.labOrder.count({
+          where: { status: "ORDERED" },
+        }),
+        t.labOrder.count({
+          where: { status: { in: ["SAMPLE_COLLECTED", "IN_PROGRESS"] } },
+        }),
+        t.labOrder.count({
+          where: {
+            status: "COMPLETED",
+            completedAt: { gte: from, lte: to },
+          },
+        }),
+        t.labOrder.count({
+          where: { createdAt: { gte: from, lte: to } },
+        }),
+      ]);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        role: "LAB_TECH",
+        pendingSamples,
+        inProgress,
+        completedToday,
+        ordersToday,
+      },
+    });
+  }
+
+  if (role === "NURSE") {
+    const [admittedCount, freeBeds, totalBeds, notesToday] = await Promise.all([
+      t.ipdAdmission.count({ where: { status: "ADMITTED" } }),
+      t.bed.count({ where: { isOccupied: false, isActive: true } }),
+      t.bed.count({ where: { isActive: true } }),
+      t.nursingNote.count({
+        where: {
+          nurseId: userId,
+          createdAt: { gte: from, lte: to },
+        },
+      }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        role: "NURSE",
+        admittedCount,
+        freeBeds,
+        totalBeds,
+        notesToday,
+      },
+    });
+  }
+
   return NextResponse.json({
     success: true,
     data: { role },

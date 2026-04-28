@@ -3,6 +3,11 @@ import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
 import { rateLimit, getIp, LIMITS } from "@/lib/rate-limit";
+import { runAfterResponse } from "@/lib/background";
+import {
+  sendWhatsApp,
+  appointmentConfirmationMessage,
+} from "@/lib/twilio";
 
 // Strip control characters and cap length. Note is shown in admin UI
 // later, so we accept unicode letters / punctuation but not \x00-\x1F.
@@ -213,11 +218,52 @@ export async function POST(
     throw err;
   }
 
+  // Resolve doctor display name once — used both in response (so the
+  // success card can show "Dr. Smith" without a follow-up fetch) and in
+  // the WhatsApp confirmation.
+  const doctorUser = await prisma.user.findUnique({
+    where: { id: doctor.userId },
+    select: { name: true },
+  });
+  const doctorName = doctorUser?.name ?? "your doctor";
+
+  // Fire-and-forget WhatsApp confirmation. Public bookings always have a
+  // walk-in (no patientId), so opt-out is implicit consent at booking time.
+  const createdAppt = appt;
+  const clinicId = clinic.id;
+  const clinicName = clinic.name;
+  runAfterResponse(async () => {
+    if (!createdAppt.patientPhone) return;
+    const msg = appointmentConfirmationMessage({
+      clinicName,
+      patientName: createdAppt.patientName,
+      doctorName,
+      date: createdAppt.appointmentDate,
+      timeSlot: createdAppt.timeSlot,
+    });
+    await sendWhatsApp(createdAppt.patientPhone, msg);
+    await db(clinicId).notification.create({
+      data: {
+        clinicId,
+        patientId: null,
+        type: "APPOINTMENT_CONFIRMED",
+        channel: "WHATSAPP",
+        message: msg,
+        status: "SENT",
+        sentAt: new Date(),
+      },
+    });
+  });
+
   return NextResponse.json({
     success: true,
     data: {
       id: appt.id,
       confirmation: `APT-${appt.id.slice(-6).toUpperCase()}`,
+      doctorName,
+      clinicName,
+      appointmentDate: appt.appointmentDate.toISOString(),
+      timeSlot: appt.timeSlot,
     },
   });
 }

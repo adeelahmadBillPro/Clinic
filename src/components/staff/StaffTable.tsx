@@ -13,7 +13,9 @@ import {
   AlertTriangle,
   Pencil,
   Trash2,
+  UsersRound,
 } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Dialog,
   DialogContent,
@@ -170,9 +172,11 @@ export function StaffTable({
 
   if (staff.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-        No staff yet. Add your first doctor or receptionist to get started.
-      </div>
+      <EmptyState
+        icon={UsersRound}
+        title="No staff yet"
+        description="Add your first doctor, receptionist, or nurse using the Add staff button above."
+      />
     );
   }
 

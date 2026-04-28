@@ -135,10 +135,9 @@ export function ReceptionScreen({
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">OPD</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Reception</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Reception &middot; Register and check in walk-in patients, issue
-            tokens, and track the live queue board.
+            Issue tokens, register walk-ins, manage today&rsquo;s queue.
           </p>
         </div>
         {clinicSlug && (
@@ -207,10 +206,15 @@ export function ReceptionScreen({
                 key="empty"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="rounded-xl border border-dashed bg-card/60 p-6 text-center text-sm text-muted-foreground"
+                className="rounded-xl border border-dashed bg-card/60 p-6 text-center"
               >
-                <CirclePlus className="mx-auto mb-2 h-6 w-6" />
-                Pick a patient above (or register a new one) to issue a token.
+                <CirclePlus className="mx-auto mb-2 h-6 w-6 text-primary" />
+                <div className="text-sm font-medium">
+                  Pick a patient above
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Or register a new walk-in to issue them a token.
+                </p>
               </motion.div>
             )}
           </AnimatePresence>

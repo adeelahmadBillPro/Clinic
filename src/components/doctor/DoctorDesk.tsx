@@ -2,8 +2,16 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, Zap } from "lucide-react";
+import {
+  Loader2,
+  Zap,
+  ListChecks,
+  Stethoscope,
+  CheckCircle2,
+  ChevronDown,
+} from "lucide-react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 import {
   Select,
@@ -75,6 +83,10 @@ export function DoctorDesk({
     currentDoctorId,
   );
   const [tokens, setTokens] = useState<Token[]>([]);
+  const [completedTokens, setCompletedTokens] = useState<Token[]>([]);
+  // Default expanded — doctor frequently re-opens completed consultations
+  // to amend medicines / notes (see ConsultationPanel edit-mode banner).
+  const [showCompleted, setShowCompleted] = useState(true);
   const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -91,28 +103,52 @@ export function DoctorDesk({
     }
   }, [selectedDoctorId, isAdmin]);
 
-  const loadQueue = useCallback(async () => {
-    if (!selectedDoctorId) return;
+  const loadQueue = useCallback(async (): Promise<Token[]> => {
+    if (!selectedDoctorId) return [];
     try {
       const res = await fetch(`/api/tokens?doctorId=${selectedDoctorId}&today=true`);
       const body = await res.json();
       if (body?.success) {
-        const active = (body.data as Token[]).filter(
+        const all = body.data as Token[];
+        const active = all.filter(
           (t) => t.status !== "COMPLETED" && t.status !== "EXPIRED" && t.status !== "CANCELLED",
         );
+        const completed = all.filter((t) => t.status === "COMPLETED");
         setTokens(active);
+        setCompletedTokens(completed);
+        return active;
       }
+      return [];
     } finally {
       setLoading(false);
     }
   }, [selectedDoctorId]);
+
+  // After a consultation is completed/referred, jump straight to the next
+  // waiting patient instead of dropping the doctor on an empty screen.
+  // Emergencies float to the top — same priority as `Call next`.
+  function pickNextActive(list: Token[]): Token | null {
+    const sorted = [...list].sort((a, b) => {
+      if (a.type === "EMERGENCY" && b.type !== "EMERGENCY") return -1;
+      if (b.type === "EMERGENCY" && a.type !== "EMERGENCY") return 1;
+      return new Date(a.issuedAt).getTime() - new Date(b.issuedAt).getTime();
+    });
+    return (
+      sorted.find((t) => t.status === "IN_PROGRESS") ??
+      sorted.find((t) => t.status === "CALLED") ??
+      sorted.find((t) => t.status === "WAITING") ??
+      null
+    );
+  }
 
   useEffect(() => {
     loadDoctors();
   }, [loadDoctors]);
 
   // loadQueue itself no-ops when selectedDoctorId is null, so polling is safe.
-  usePolling(loadQueue, 8000);
+  usePolling(() => {
+    void loadQueue();
+  }, 8000);
 
   useEffect(() => {
     // Auto-pick first in-progress or called token
@@ -140,15 +176,19 @@ export function DoctorDesk({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: "CALLED" }),
     });
-    const body = await res.json();
-    if (body?.success) {
-      toast.success(`Called ${next.displayToken}`);
-      setActiveTokenId(next.id);
-      loadQueue();
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.success) {
+      toast.error(body?.error ?? "Could not call next");
+      return;
     }
+    toast.success(`Called ${next.displayToken}`);
+    setActiveTokenId(next.id);
+    loadQueue();
   }
 
-  const activeToken = tokens.find((t) => t.id === activeTokenId);
+  const activeToken =
+    tokens.find((t) => t.id === activeTokenId) ??
+    completedTokens.find((t) => t.id === activeTokenId);
 
   return (
     <div className="flex min-h-[calc(100dvh-8rem)] flex-col gap-4 lg:flex-row">
@@ -240,8 +280,13 @@ export function DoctorDesk({
                 Loading queue...
               </li>
             ) : tokens.length === 0 ? (
-              <li className="rounded-md border border-dashed p-4 text-center text-xs text-muted-foreground">
-                No one in the queue yet.
+              <li>
+                <EmptyState
+                  icon={ListChecks}
+                  title="No tokens in your queue"
+                  description="As reception issues tokens for you, they will show up here automatically."
+                  className="p-6"
+                />
               </li>
             ) : (
               <AnimatePresence initial={false}>
@@ -317,6 +362,61 @@ export function DoctorDesk({
               </AnimatePresence>
             )}
           </ol>
+
+          {completedTokens.length > 0 && (
+            <div className="mt-3 border-t pt-3">
+              <button
+                type="button"
+                onClick={() => setShowCompleted((s) => !s)}
+                className="flex w-full items-center justify-between rounded-md px-1 py-1 text-left text-xs font-medium text-muted-foreground transition hover:bg-muted/40"
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3 w-3 text-emerald-600" />
+                  Completed today ({completedTokens.length})
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-3 w-3 transition",
+                    showCompleted && "rotate-180",
+                  )}
+                />
+              </button>
+              {showCompleted && (
+                <ol className="mt-2 space-y-1.5">
+                  {completedTokens.map((tk) => {
+                    const active = activeTokenId === tk.id;
+                    return (
+                      <li key={tk.id}>
+                        <button
+                          onClick={() => setActiveTokenId(tk.id)}
+                          className={cn(
+                            "flex w-full items-center gap-2 rounded-lg border bg-emerald-500/5 px-2.5 py-2 text-left transition hover:bg-emerald-500/10",
+                            active && "ring-2 ring-primary/40",
+                          )}
+                          title="Open to amend medicines / notes"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-mono text-[11px] font-bold text-emerald-700">
+                                {tk.displayToken}
+                              </span>
+                            </div>
+                            <div className="truncate text-xs font-medium">
+                              {tk.patient?.name}
+                            </div>
+                          </div>
+                          <span className="rounded-full border border-emerald-500/30 bg-background px-1.5 py-0.5 text-[9px] font-medium text-emerald-700">
+                            Edit
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
+            </div>
+          )}
         </div>
       </aside>
 
@@ -326,22 +426,107 @@ export function DoctorDesk({
           <ConsultationPanel
             token={activeToken}
             userId={userId}
-            onDone={() => {
+            onDone={async () => {
               setActiveTokenId(null);
-              loadQueue();
+              const fresh = await loadQueue();
+              const next = pickNextActive(fresh);
+              if (next) setActiveTokenId(next.id);
             }}
           />
         ) : (
-          <div className="flex h-full min-h-[420px] items-center justify-center rounded-xl border border-dashed bg-card/50 p-10 text-center">
-            <div>
-              <div className="text-sm font-medium">No patient selected</div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Pick a token from the queue to start the consultation.
-              </p>
-            </div>
-          </div>
+          <NextPatientEmptyState
+            tokens={tokens}
+            onPick={(id) => setActiveTokenId(id)}
+          />
         )}
       </div>
+    </div>
+  );
+}
+
+// Empty state for the consultation pane. When the queue has waiting
+// patients, show the next one as a clickable card so the doctor never
+// has to hunt for it. Falls back to a plain message when the queue is
+// empty.
+function NextPatientEmptyState({
+  tokens,
+  onPick,
+}: {
+  tokens: Token[];
+  onPick: (id: string) => void;
+}) {
+  const next = (() => {
+    const sorted = [...tokens].sort((a, b) => {
+      if (a.type === "EMERGENCY" && b.type !== "EMERGENCY") return -1;
+      if (b.type === "EMERGENCY" && a.type !== "EMERGENCY") return 1;
+      return new Date(a.issuedAt).getTime() - new Date(b.issuedAt).getTime();
+    });
+    return (
+      sorted.find((t) => t.status === "IN_PROGRESS") ??
+      sorted.find((t) => t.status === "CALLED") ??
+      sorted.find((t) => t.status === "WAITING") ??
+      null
+    );
+  })();
+
+  if (!next) {
+    return (
+      <div className="flex h-full min-h-[420px] items-center justify-center">
+        <EmptyState
+          icon={Stethoscope}
+          title="No patient in queue"
+          description="As reception issues tokens for you, they will show up on the left."
+          className="w-full"
+        />
+      </div>
+    );
+  }
+
+  const waiters = tokens.filter((t) => t.status === "WAITING").length;
+
+  return (
+    <div className="flex h-full min-h-[420px] items-center justify-center">
+      <motion.button
+        type="button"
+        onClick={() => onPick(next.id)}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover={{ scale: 1.01 }}
+        whileTap={{ scale: 0.99 }}
+        className="group w-full max-w-md rounded-2xl border-2 border-dashed border-primary/30 bg-card p-8 text-left shadow-sm transition hover:border-primary/60 hover:shadow-md"
+      >
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+          <Stethoscope className="h-3.5 w-3.5" />
+          {next.status === "WAITING" ? "Next in queue" : "Continue with"}
+        </div>
+        <div className="mt-2 flex items-baseline gap-3">
+          <span className="font-mono text-3xl font-bold text-primary">
+            {next.displayToken}
+          </span>
+          {next.type === "EMERGENCY" && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-destructive/15 px-2 py-0.5 text-[10px] font-semibold text-destructive">
+              <Zap className="h-3 w-3" />
+              Emergency
+            </span>
+          )}
+        </div>
+        <div className="mt-1 text-lg font-semibold">
+          {next.patient?.name ?? "Patient"}
+        </div>
+        {next.chiefComplaint && (
+          <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">
+            {next.chiefComplaint}
+          </div>
+        )}
+        <div className="mt-5 flex items-center justify-between">
+          <div className="text-xs text-muted-foreground">
+            {waiters > 1 && `${waiters - (next.status === "WAITING" ? 1 : 0)} more waiting`}
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-sm font-semibold text-primary-foreground transition group-hover:brightness-110">
+            Start consultation →
+          </span>
+        </div>
+      </motion.button>
     </div>
   );
 }

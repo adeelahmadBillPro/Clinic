@@ -12,6 +12,12 @@ import {
   Clock,
   Award,
   Languages as LanguagesIcon,
+  Calendar,
+  MapPin,
+  Phone,
+  User,
+  Copy,
+  Check as CheckIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -21,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { DatePicker } from "@/components/shared/DatePicker";
 import { PhoneInput } from "@/components/shared/PhoneInput";
+import { useEnterTabsForward } from "@/lib/hooks/useEnterTabsForward";
 import { cn } from "@/lib/utils";
 
 type Doctor = {
@@ -99,13 +106,24 @@ function DoctorAvatar({
   );
 }
 
+type Confirmation = {
+  confirmation: string;
+  doctorName: string;
+  clinicName: string;
+  appointmentDate: string;
+  timeSlot: string;
+};
+
 export function PublicBookingForm({
   slug,
   doctors,
+  clinic,
 }: {
   slug: string;
   doctors: Doctor[];
+  clinic: { name: string; phone: string | null; address: string | null };
 }) {
+  const handleEnterTab = useEnterTabsForward();
   const [selectedId, setSelectedId] = useState<string>(doctors[0]?.id ?? "");
   const [query, setQuery] = useState("");
   const [form, setForm] = useState({
@@ -116,7 +134,8 @@ export function PublicBookingForm({
     notes: "",
   });
   const [submitting, setSubmitting] = useState(false);
-  const [confirmation, setConfirmation] = useState<string | null>(null);
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loadingReviews, setLoadingReviews] = useState(false);
   const [slots, setSlots] = useState<SlotInfo[]>([]);
@@ -214,45 +233,168 @@ export function PublicBookingForm({
         toast.error(body?.error ?? "Could not book");
         return;
       }
-      setConfirmation(body.data.confirmation);
+      setConfirmation({
+        confirmation: body.data.confirmation,
+        doctorName: body.data.doctorName ?? selected.name,
+        clinicName: body.data.clinicName ?? clinic.name,
+        appointmentDate: body.data.appointmentDate ?? form.appointmentDate,
+        timeSlot: body.data.timeSlot ?? form.timeSlot,
+      });
     } finally {
       setSubmitting(false);
     }
   }
 
+  async function copyCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCodeCopied(true);
+      window.setTimeout(() => setCodeCopied(false), 1500);
+      toast.success("Confirmation code copied");
+    } catch {
+      toast.error("Could not copy");
+    }
+  }
+
   if (confirmation) {
+    const apptDate = new Date(confirmation.appointmentDate);
+    const niceDate = apptDate.toLocaleDateString(undefined, {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="card-surface flex flex-col items-center gap-4 p-8 text-center sm:p-10"
+        className="mx-auto max-w-xl"
       >
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600">
-          <CheckCircle2 className="h-7 w-7" />
-        </div>
-        <h2 className="text-xl font-semibold">Appointment confirmed</h2>
-        <p className="text-sm text-muted-foreground">
-          Confirmation code:{" "}
-          <span className="font-mono font-bold text-foreground">
-            {confirmation}
-          </span>
-        </p>
-        <p className="max-w-md text-sm text-muted-foreground">
-          We&rsquo;ll contact you on the phone you provided to confirm the exact
-          time and any preparation instructions.
-        </p>
+        <div className="card-surface overflow-hidden">
+          <div className="bg-gradient-to-br from-emerald-500/15 via-emerald-500/5 to-transparent p-7 text-center">
+            <motion.div
+              initial={{ scale: 0.6, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{
+                type: "spring",
+                stiffness: 220,
+                damping: 18,
+                delay: 0.05,
+              }}
+              className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-600 ring-4 ring-emerald-500/10"
+            >
+              <CheckCircle2 className="h-8 w-8" />
+            </motion.div>
+            <h2 className="text-xl font-semibold tracking-tight">
+              You&rsquo;re booked
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              We&rsquo;ve sent a WhatsApp confirmation to{" "}
+              <span className="font-medium text-foreground">
+                {form.patientPhone}
+              </span>
+              .
+            </p>
+          </div>
 
-        <div className="mt-2 w-full max-w-md rounded-xl border bg-muted/30 p-4 text-left">
-          <p className="text-xs text-muted-foreground">
-            After your visit, help future patients by leaving a review.
-          </p>
-          <a
-            href={`/review/${confirmation}`}
-            className="mt-2 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-          >
-            <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-            Leave a review after your visit
-          </a>
+          <div className="space-y-4 p-6">
+            <div className="rounded-xl border bg-muted/30 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                    Confirmation code
+                  </div>
+                  <div className="mt-1 font-mono text-lg font-bold tracking-wider">
+                    {confirmation.confirmation}
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => copyCode(confirmation.confirmation)}
+                  className="shrink-0"
+                >
+                  {codeCopied ? (
+                    <>
+                      <CheckIcon className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-1.5 h-3.5 w-3.5" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <ul className="space-y-2.5 text-sm">
+              <li className="flex items-start gap-3">
+                <User className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <div className="text-xs text-muted-foreground">Doctor</div>
+                  <div className="font-medium">{confirmation.doctorName}</div>
+                </div>
+              </li>
+              <li className="flex items-start gap-3">
+                <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <div className="text-xs text-muted-foreground">When</div>
+                  <div className="font-medium">
+                    {niceDate} at {confirmation.timeSlot}
+                  </div>
+                </div>
+              </li>
+              <li className="flex items-start gap-3">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                <div>
+                  <div className="text-xs text-muted-foreground">Where</div>
+                  <div className="font-medium">{confirmation.clinicName}</div>
+                  {clinic.address && (
+                    <div className="mt-0.5 text-xs text-muted-foreground">
+                      {clinic.address}
+                    </div>
+                  )}
+                </div>
+              </li>
+              {clinic.phone && (
+                <li className="flex items-start gap-3">
+                  <Phone className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                  <div>
+                    <div className="text-xs text-muted-foreground">
+                      Need to change anything?
+                    </div>
+                    <a
+                      href={`tel:${clinic.phone.replace(/[^\d+]/g, "")}`}
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Call {clinic.phone}
+                    </a>
+                  </div>
+                </li>
+              )}
+            </ul>
+
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-amber-800">
+              <strong className="font-semibold">Save this for your records.</strong>{" "}
+              Take a screenshot or note your confirmation code — you may be
+              asked for it at the front desk.
+            </div>
+
+            <div className="rounded-lg border bg-card p-3 text-left">
+              <p className="text-xs text-muted-foreground">
+                After your visit, help future patients by leaving a review.
+              </p>
+              <a
+                href={`/review/${confirmation.confirmation}`}
+                className="mt-1.5 inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              >
+                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                Leave a review after your visit
+              </a>
+            </div>
+          </div>
         </div>
       </motion.div>
     );
@@ -475,11 +617,16 @@ export function PublicBookingForm({
         )}
 
         {/* Booking form */}
-        <motion.div
+        <motion.form
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
           className="card-surface space-y-4 p-5"
+          onKeyDown={handleEnterTab}
+          onSubmit={(e) => {
+            e.preventDefault();
+            void submit();
+          }}
         >
           <div className="text-sm font-semibold">Your details</div>
           <div className="grid gap-3 sm:grid-cols-2">
@@ -599,9 +746,9 @@ export function PublicBookingForm({
           </div>
 
           <Button
+            type="submit"
             size="lg"
             className="w-full h-12 text-sm font-semibold"
-            onClick={submit}
             disabled={submitting}
           >
             {submitting ? (
@@ -613,7 +760,7 @@ export function PublicBookingForm({
               <>Book appointment with {selected?.name.split(" ")[0] ?? "doctor"}</>
             )}
           </Button>
-        </motion.div>
+        </motion.form>
       </div>
     </div>
   );

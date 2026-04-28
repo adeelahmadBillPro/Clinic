@@ -186,32 +186,93 @@ export async function POST(req: Request) {
     );
   }
 
-  // Prevent duplicate active tokens for the same patient (any doctor) today
+  // Same-patient-same-day token rules:
+  //   1. Active token (WAITING/CALLED/IN_PROGRESS): hard block — finish or
+  //      cancel the open one first.
+  //   2. Completed by SAME doctor today: hard block — same-doctor reviews
+  //      are usually next-day; this catches accidental double-issue. The
+  //      doctor can edit the existing completed consultation directly
+  //      from their desk instead of issuing a new token.
+  //   3. Completed by DIFFERENT doctor today: soft warning with
+  //      MULTI_VISIT_CONFIRM. Multi-specialty visits are common (GP →
+  //      cardiologist same trip), so we let the receptionist confirm
+  //      rather than block.
+  // CANCELLED / EXPIRED tokens don't count — they didn't happen.
   const todayStart = startOfToday();
-  const existingActive = await t.token.findFirst({
+  const todaysTokens = await t.token.findMany({
     where: {
       patientId: input.patientId,
-      status: { in: ["WAITING", "CALLED", "IN_PROGRESS"] },
       issuedAt: { gte: todayStart },
+      status: { notIn: ["CANCELLED", "EXPIRED"] },
     },
     select: {
       id: true,
       displayToken: true,
       status: true,
       doctorId: true,
+      issuedAt: true,
     },
+    orderBy: { issuedAt: "desc" },
   });
-  if (existingActive) {
+
+  const blockingActive = todaysTokens.find((tk) =>
+    ["WAITING", "CALLED", "IN_PROGRESS"].includes(tk.status),
+  );
+  if (blockingActive) {
     return NextResponse.json(
       {
         success: false,
-        error: `This patient already has an active token today: ${existingActive.displayToken} (${existingActive.status.replace("_", " ").toLowerCase()}). Cancel or complete it before issuing a new one.`,
+        error: `This patient already has an active token today: ${blockingActive.displayToken} (${blockingActive.status.replace("_", " ").toLowerCase()}). Cancel or complete it before issuing a new one.`,
         field: "patientId",
         existingToken: {
-          id: existingActive.id,
-          displayToken: existingActive.displayToken,
-          status: existingActive.status,
-          doctorId: existingActive.doctorId,
+          id: blockingActive.id,
+          displayToken: blockingActive.displayToken,
+          status: blockingActive.status,
+          doctorId: blockingActive.doctorId,
+        },
+      },
+      { status: 409 },
+    );
+  }
+
+  const sameDoctorCompleted = todaysTokens.find(
+    (tk) => tk.doctorId === input.doctorId && tk.status === "COMPLETED",
+  );
+  if (sameDoctorCompleted) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `This patient was already seen by this doctor today (${sameDoctorCompleted.displayToken}). Open the completed consultation from the doctor's desk to edit medicines or notes — no new token needed.`,
+        field: "doctorId",
+      },
+      { status: 409 },
+    );
+  }
+
+  const otherDoctorCompleted = todaysTokens.find(
+    (tk) => tk.doctorId !== input.doctorId && tk.status === "COMPLETED",
+  );
+  if (otherDoctorCompleted && !input.acknowledgeMultiVisit) {
+    // Look up the other doctor's name so the warning is human-readable.
+    const otherDoctor = await t.doctor.findUnique({
+      where: { id: otherDoctorCompleted.doctorId },
+      select: { userId: true, specialization: true },
+    });
+    const otherUser = otherDoctor
+      ? await prisma.user.findUnique({
+          where: { id: otherDoctor.userId },
+          select: { name: true },
+        })
+      : null;
+    return NextResponse.json(
+      {
+        success: false,
+        code: "MULTI_VISIT_CONFIRM",
+        error: `This patient was already seen by Dr. ${otherUser?.name ?? "another doctor"}${otherDoctor?.specialization ? ` (${otherDoctor.specialization})` : ""} today. Issue another token to a second doctor?`,
+        previousToken: {
+          displayToken: otherDoctorCompleted.displayToken,
+          doctorName: otherUser?.name ?? "Another doctor",
+          specialization: otherDoctor?.specialization ?? null,
         },
       },
       { status: 409 },

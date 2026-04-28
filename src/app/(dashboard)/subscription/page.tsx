@@ -39,7 +39,7 @@ export default async function SubscriptionPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Subscription</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Your plan, usage, and billing.
+          Your plan, usage, billing cycle.
         </p>
       </div>
       <SubscriptionPanel

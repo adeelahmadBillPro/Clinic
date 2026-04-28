@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { X, Loader2, Receipt, Zap } from "lucide-react";
+import { X, Loader2, Receipt, Zap, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -18,7 +18,16 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { AllergyBanner } from "@/components/shared/AllergyBanner";
+import { FieldHelp } from "@/components/shared/FieldHelp";
 import { TokenSlipDialog } from "./TokenSlipDialog";
 import { cn } from "@/lib/utils";
 
@@ -73,11 +82,16 @@ export function IssueTokenCard({
   const [submitting, setSubmitting] = useState(false);
   const [feeOverride, setFeeOverride] = useState<string>("");
   const [slip, setSlip] = useState<Slip | null>(null);
+  const [multiVisitPrompt, setMultiVisitPrompt] = useState<{
+    displayToken: string;
+    doctorName: string;
+    specialization: string | null;
+  } | null>(null);
 
   const doctor = doctors.find((d) => d.id === doctorId);
   const fee = feeOverride !== "" ? Number(feeOverride) : doctor?.consultationFee ?? 0;
 
-  async function issue() {
+  async function issue(acknowledgeMultiVisit = false) {
     if (!doctorId) {
       toast.error("Pick a doctor");
       return;
@@ -99,9 +113,22 @@ export function IssueTokenCard({
           feeAmount: fee,
           paymentMethod,
           feePaid,
+          acknowledgeMultiVisit,
         }),
       });
       const body = await res.json().catch(() => ({}));
+
+      // Multi-doctor same-day soft warning — backend asks reception to
+      // confirm before creating a second token. See /api/tokens/route.ts.
+      if (res.status === 409 && body?.code === "MULTI_VISIT_CONFIRM") {
+        setMultiVisitPrompt({
+          displayToken: body.previousToken?.displayToken ?? "",
+          doctorName: body.previousToken?.doctorName ?? "another doctor",
+          specialization: body.previousToken?.specialization ?? null,
+        });
+        return;
+      }
+
       if (!res.ok || !body?.success) {
         toast.error(body?.error ?? "Could not issue token");
         return;
@@ -123,6 +150,11 @@ export function IssueTokenCard({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  async function confirmMultiVisit() {
+    setMultiVisitPrompt(null);
+    await issue(true);
   }
 
   return (
@@ -205,7 +237,13 @@ export function IssueTokenCard({
           </div>
 
           <div>
-            <Label>Visit type</Label>
+            <Label>
+              Visit type
+              <FieldHelp>
+                OPD = walk-in consultation. IPD = inpatient (already
+                admitted). EMERGENCY = jumps to top of the queue.
+              </FieldHelp>
+            </Label>
             <RadioGroup
               value={visitType}
               onValueChange={(v) => setVisitType(v as "OPD" | "EMERGENCY")}
@@ -237,7 +275,13 @@ export function IssueTokenCard({
           </div>
 
           <div>
-            <Label htmlFor="complaint">Chief complaint</Label>
+            <Label htmlFor="complaint">
+              Chief complaint
+              <FieldHelp>
+                Why the patient is here today, in their own words. Doctor
+                sees this on the queue card before calling them.
+              </FieldHelp>
+            </Label>
             <Textarea
               id="complaint"
               value={complaint}
@@ -297,6 +341,10 @@ export function IssueTokenCard({
                   className="cursor-pointer text-xs font-normal"
                 >
                   Fee collected now
+                  <FieldHelp>
+                    If unchecked, the bill is created as PENDING and
+                    reception can collect later.
+                  </FieldHelp>
                 </Label>
               </div>
             </div>
@@ -306,7 +354,7 @@ export function IssueTokenCard({
             className="w-full"
             size="lg"
             disabled={submitting || !doctorId || complaint.trim().length < 2}
-            onClick={issue}
+            onClick={() => issue(false)}
           >
             {submitting ? (
               <>
@@ -330,6 +378,73 @@ export function IssueTokenCard({
       {slip && (
         <TokenSlipDialog slip={slip} onClose={() => setSlip(null)} />
       )}
+
+      <Dialog
+        open={!!multiVisitPrompt}
+        onOpenChange={(open) => !open && setMultiVisitPrompt(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <UserCheck className="h-4 w-4 text-amber-500" />
+              Already seen today
+            </DialogTitle>
+            <DialogDescription className="pt-2 text-sm leading-relaxed">
+              <span className="font-medium text-foreground">
+                {patient.name}
+              </span>{" "}
+              was already seen by{" "}
+              <span className="font-medium text-foreground">
+                Dr. {multiVisitPrompt?.doctorName}
+              </span>
+              {multiVisitPrompt?.specialization && (
+                <span className="text-muted-foreground">
+                  {" "}
+                  ({multiVisitPrompt.specialization})
+                </span>
+              )}{" "}
+              today
+              {multiVisitPrompt?.displayToken && (
+                <>
+                  {" "}
+                  ·{" "}
+                  <span className="font-mono text-xs">
+                    {multiVisitPrompt.displayToken}
+                  </span>
+                </>
+              )}
+              .
+              <br />
+              <br />
+              Issue a second token to{" "}
+              <span className="font-medium text-foreground">
+                Dr. {doctor?.name}
+              </span>
+              ? Multi-specialty visits (e.g. GP → cardiologist same trip) are
+              fine.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setMultiVisitPrompt(null)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button onClick={confirmMultiVisit} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                  Issuing...
+                </>
+              ) : (
+                "Yes, issue token"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

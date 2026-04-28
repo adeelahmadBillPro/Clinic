@@ -10,7 +10,9 @@ import {
   Loader2,
   Zap,
   RefreshCcw,
+  Ticket,
 } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Tabs,
   TabsList,
@@ -206,9 +208,11 @@ export function TokenBoard() {
 
         <TabsContent value={tab} className="mt-3">
           {sorted.length === 0 ? (
-            <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-              No tokens in this view.
-            </div>
+            <EmptyState
+              icon={Ticket}
+              title="Queue is empty"
+              description="Once you issue tokens, they will appear here in real time. Pick a patient above to issue one."
+            />
           ) : (
             <motion.ul
               className="space-y-2"

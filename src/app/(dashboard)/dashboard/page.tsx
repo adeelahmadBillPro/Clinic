@@ -8,6 +8,7 @@ import { ClinicMap } from "@/components/dashboard/ClinicMap";
 import { ResetTokensButton } from "@/components/dashboard/ResetTokensButton";
 import { TodayPanel } from "@/components/dashboard/TodayPanel";
 import { TeamPerformanceTable } from "@/components/dashboard/TeamPerformanceTable";
+import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
 import { buttonVariants } from "@/components/ui/button";
 import { UserPlus, BanknoteArrowDown } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,7 @@ export default async function DashboardPage() {
             Good {greetingByHour()}, {session.user.name?.split(" ").slice(-1)[0]}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Here&rsquo;s what&rsquo;s happening at your clinic today.
+            Today at your clinic — quick stats and queue.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -58,6 +59,9 @@ export default async function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* First-time setup checklist — auto-hides once all 4 steps are done. */}
+      <OnboardingChecklist />
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <KpiCard

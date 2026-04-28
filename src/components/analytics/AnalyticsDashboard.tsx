@@ -16,7 +16,9 @@ import {
   Legend,
 } from "recharts";
 import { motion } from "framer-motion";
+import { BarChart as BarChartIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 const COLORS = [
   "oklch(0.46 0.09 168)",
@@ -43,9 +45,22 @@ export function AnalyticsDashboard({
   topMeds: Array<{ name: string; qty: number }>;
 }) {
   const totalRevenue = revenue.reduce((s, r) => s + r.total, 0);
+  const totalPatients = daily.reduce((s, d) => s + d.patients, 0);
   const max = Math.max(1, ...heatmap.flat());
   const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+  // No activity at all in the last 30 days — show a friendly empty state
+  // before the (otherwise blank) charts.
+  if (totalRevenue === 0 && totalPatients === 0 && doctors.length === 0) {
+    return (
+      <EmptyState
+        icon={BarChartIcon}
+        title="Not enough data yet"
+        description="You need at least a few visits, prescriptions, or bills before charts will populate. Charts cover the last 30 days."
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

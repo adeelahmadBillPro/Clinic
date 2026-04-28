@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Search } from "lucide-react";
+import { Search, Receipt } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Tabs,
   TabsContent,
@@ -93,9 +94,21 @@ export function BillingList({ initial }: { initial: BillRow[] }) {
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No bills match.
-        </div>
+        tab === "ALL" && !q.trim() ? (
+          <EmptyState
+            icon={Receipt}
+            title="No bills yet"
+            description="Bills generated from OPD, pharmacy, lab, or IPD show up here. Create your first bill to get started."
+            actionLabel="Generate first bill"
+            actionHref="/billing/new"
+          />
+        ) : (
+          <EmptyState
+            icon={Search}
+            title="No bills match"
+            description="Try a different bill number, status, or clear the filter to see everything."
+          />
+        )
       ) : (
         <motion.ul
           initial="initial"

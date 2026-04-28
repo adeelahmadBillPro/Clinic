@@ -50,7 +50,47 @@ export async function GET(req: Request) {
     },
   });
 
-  return NextResponse.json({ success: true, data: patients });
+  // Today's status chip per patient — see /patients page for the same
+  // join, kept consistent so the search-result list looks identical to
+  // the initial list.
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const ids = patients.map((p) => p.id);
+  const todaysTokens =
+    ids.length > 0
+      ? await t.token.findMany({
+          where: {
+            patientId: { in: ids },
+            issuedAt: { gte: todayStart },
+            status: { notIn: ["CANCELLED", "EXPIRED"] },
+          },
+          orderBy: { issuedAt: "desc" },
+          select: { patientId: true, status: true, displayToken: true },
+        })
+      : [];
+  const statusByPatient = new Map<
+    string,
+    { status: string; displayToken: string }
+  >();
+  for (const tok of todaysTokens) {
+    if (!statusByPatient.has(tok.patientId)) {
+      statusByPatient.set(tok.patientId, {
+        status: tok.status,
+        displayToken: tok.displayToken,
+      });
+    }
+  }
+
+  const data = patients.map((p) => {
+    const tk = statusByPatient.get(p.id);
+    return {
+      ...p,
+      todayStatus: tk?.status ?? null,
+      todayToken: tk?.displayToken ?? null,
+    };
+  });
+
+  return NextResponse.json({ success: true, data });
 }
 
 export async function POST(req: Request) {

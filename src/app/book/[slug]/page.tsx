@@ -141,7 +141,15 @@ export default async function PublicBookingPage({
           </div>
         ) : (
           <>
-            <PublicBookingForm slug={slug} doctors={doctorList} />
+            <PublicBookingForm
+              slug={slug}
+              doctors={doctorList}
+              clinic={{
+                name: clinic.name,
+                phone: clinic.phone,
+                address: clinic.address,
+              }}
+            />
             <p className="mt-8 text-center text-xs text-muted-foreground">
               By booking you agree to be contacted at the phone number
               provided.

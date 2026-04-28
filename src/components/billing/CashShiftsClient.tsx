@@ -3,8 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { BanknoteArrowDown, Loader2, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { BanknoteArrowDown, Loader2, AlertTriangle, CheckCircle2, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -182,9 +183,11 @@ export function CashShiftsClient({
           {isAdmin ? "All shifts" : "My recent shifts"}
         </h2>
         {shifts.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
-            No shifts yet.
-          </div>
+          <EmptyState
+            icon={Wallet}
+            title="No shifts yet today"
+            description="Submit your first end-of-shift handover above. Shifts let you reconcile system-recorded cash against the cash in the drawer."
+          />
         ) : (
           <ul className="space-y-2">
             {shifts.map((s) => (

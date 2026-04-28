@@ -1,10 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { Plus, Loader2, Check, X, CalendarDays, Clock } from "lucide-react";
+import {
+  Plus,
+  Loader2,
+  Check,
+  X,
+  CalendarDays,
+  Clock,
+  Calendar,
+  MessageCircle,
+  UserX,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 import {
   Dialog,
@@ -32,6 +44,7 @@ import {
 } from "@/components/patients/PatientSearch";
 import { CheckInDialog } from "./CheckInDialog";
 import { DatePicker } from "@/components/shared/DatePicker";
+import { useEnterTabsForward } from "@/lib/hooks/useEnterTabsForward";
 import { cn } from "@/lib/utils";
 
 type Appt = {
@@ -80,6 +93,15 @@ function fmtDate(iso: string) {
   });
 }
 
+type StatusFilter =
+  | "ALL"
+  | "SCHEDULED"
+  | "CONFIRMED"
+  | "CHECKED_IN"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "NO_SHOW";
+
 export function AppointmentsBoard({
   initial,
   doctors,
@@ -88,6 +110,7 @@ export function AppointmentsBoard({
   doctors: Doctor[];
 }) {
   const router = useRouter();
+  const handleEnterTab = useEnterTabsForward();
   const [open, setOpen] = useState(false);
   const [checkInAppt, setCheckInAppt] = useState<Appt | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -109,6 +132,56 @@ export function AppointmentsBoard({
   const [slotsOpen, setSlotsOpen] = useState(true);
   const [slotsReason, setSlotsReason] = useState<string | null>(null);
   const [loadingSlots, setLoadingSlots] = useState(false);
+
+  // ---- Filter state ----
+  // Server-rendered `initial` is the first paint; once the user touches a
+  // filter we refetch via /api/appointments and replace the list. Keeps
+  // first-load fast (no extra fetch round-trip) while still letting reception
+  // search/sort/include-past without a full page navigation.
+  const [appts, setAppts] = useState<Appt[]>(initial);
+  const [q, setQ] = useState("");
+  const [doctorFilter, setDoctorFilter] = useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+  const [includePast, setIncludePast] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refetch = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const params = new URLSearchParams();
+      if (q.trim()) params.set("q", q.trim());
+      if (doctorFilter !== "ALL") params.set("doctorId", doctorFilter);
+      if (statusFilter !== "ALL") params.set("status", statusFilter);
+      // Date range: today → +14 days unless "Include past" is on, in which
+      // case we drop the lower bound entirely. We keep the upper bound (~3
+      // months) to avoid pulling the entire history into the dashboard.
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const horizon = new Date(today);
+      horizon.setDate(horizon.getDate() + 14);
+      if (!includePast) params.set("from", today.toISOString());
+      params.set("to", horizon.toISOString());
+      const res = await fetch(`/api/appointments?${params.toString()}`);
+      const body = await res.json();
+      if (res.ok && body?.success) {
+        setAppts(body.data);
+      } else {
+        toast.error(body?.error ?? "Failed to load");
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }, [q, doctorFilter, statusFilter, includePast]);
+
+  // Debounce the search input so we don't hammer the API on every keystroke.
+  // 300 ms is the receptionist sweet-spot — short enough to feel live,
+  // long enough to coalesce typing.
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      void refetch();
+    }, 300);
+    return () => window.clearTimeout(handle);
+  }, [refetch]);
 
   useEffect(() => {
     if (!form.doctorId || !form.appointmentDate) {
@@ -144,14 +217,14 @@ export function AppointmentsBoard({
 
   const byDay = useMemo(() => {
     const map = new Map<string, Appt[]>();
-    for (const a of initial) {
+    for (const a of appts) {
       const key = a.appointmentDate.slice(0, 10);
       const arr = map.get(key) ?? [];
       arr.push(a);
       map.set(key, arr);
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [initial]);
+  }, [appts]);
 
   async function book() {
     const name = selectedPatient?.name ?? form.patientName;
@@ -202,6 +275,7 @@ export function AppointmentsBoard({
       setOpen(false);
       setSelectedPatient(null);
       setForm({ ...form, patientName: "", patientPhone: "", notes: "" });
+      void refetch();
       router.refresh();
     } finally {
       setSubmitting(false);
@@ -226,26 +300,125 @@ export function AppointmentsBoard({
         return;
       }
       toast.success(label);
+      void refetch();
       router.refresh();
     } finally {
       setBusyId(null);
     }
   }
 
+  async function sendReminder(a: Appt) {
+    setBusyId(a.id);
+    try {
+      const res = await fetch(`/api/appointments/${a.id}/remind`, {
+        method: "POST",
+      });
+      const body = await res.json();
+      if (!res.ok || !body?.success) {
+        toast.error(body?.error ?? "Failed to send reminder");
+        return;
+      }
+      toast.success(`Reminder sent to ${a.patientName}`);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function cancelAppointment(a: Appt) {
+    if (!window.confirm("Cancel this appointment?")) return;
+    void patch(a.id, { status: "CANCELLED" }, "Appointment cancelled");
+  }
+
+  function markNoShow(a: Appt) {
+    if (!window.confirm(`Mark ${a.patientName} as a no-show?`)) return;
+    void patch(a.id, { status: "NO_SHOW" }, "Marked as no-show");
+  }
+
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm">
-              <Plus className="mr-1.5 h-3.5 w-3.5" />
-              Book appointment
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>New appointment</DialogTitle>
-            </DialogHeader>
+      {/* Filter bar */}
+      <div className="card-surface flex flex-wrap items-end gap-3 p-3">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by patient name or phone"
+            className="h-9 pl-8 text-sm"
+          />
+        </div>
+        <div className="min-w-[180px]">
+          <Select
+            value={doctorFilter}
+            onValueChange={(v) => v && setDoctorFilter(v)}
+          >
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="All doctors" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All doctors</SelectItem>
+              {doctors.map((d) => (
+                <SelectItem key={d.id} value={d.id}>
+                  {d.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="min-w-[160px]">
+          <Select
+            value={statusFilter}
+            onValueChange={(v) => v && setStatusFilter(v as StatusFilter)}
+          >
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="All statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All statuses</SelectItem>
+              <SelectItem value="SCHEDULED">Scheduled</SelectItem>
+              <SelectItem value="CONFIRMED">Confirmed</SelectItem>
+              <SelectItem value="CHECKED_IN">Checked-in</SelectItem>
+              <SelectItem value="COMPLETED">Completed</SelectItem>
+              <SelectItem value="CANCELLED">Cancelled</SelectItem>
+              <SelectItem value="NO_SHOW">No-show</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-medium text-muted-foreground">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5"
+            checked={includePast}
+            onChange={(e) => setIncludePast(e.target.checked)}
+          />
+          Include past
+        </label>
+        {refreshing && (
+          <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Updating
+          </span>
+        )}
+        <div className="ml-auto">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Book appointment
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>New appointment</DialogTitle>
+              </DialogHeader>
+              <form
+                onKeyDown={handleEnterTab}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void book();
+                }}
+                className="space-y-4"
+              >
 
             <div>
               <Label>Existing patient (optional)</Label>
@@ -424,9 +597,11 @@ export function AppointmentsBoard({
 
             <DialogFooter>
               <DialogClose asChild>
-                <Button variant="ghost">Cancel</Button>
+                <Button type="button" variant="ghost">
+                  Cancel
+                </Button>
               </DialogClose>
-              <Button onClick={book} disabled={submitting}>
+              <Button type="submit" disabled={submitting}>
                 {submitting ? (
                   <>
                     <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -437,14 +612,18 @@ export function AppointmentsBoard({
                 )}
               </Button>
             </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       {byDay.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No upcoming appointments.
-        </div>
+        <EmptyState
+          icon={Calendar}
+          title="No upcoming appointments"
+          description="Book one from reception, or share your public booking link with patients."
+        />
       ) : (
         <div className="space-y-5">
           {byDay.map(([day, list]) => {
@@ -468,86 +647,108 @@ export function AppointmentsBoard({
                   }}
                   className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
                 >
-                  {list.map((a) => (
-                    <motion.li
-                      key={a.id}
-                      variants={{
-                        initial: { opacity: 0, y: 6 },
-                        animate: { opacity: 1, y: 0 },
-                      }}
-                      className={cn(
-                        "rounded-xl border bg-card p-4",
-                        STATUS_COLOR[a.status],
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <div className="text-xs font-mono font-semibold">
-                            {a.timeSlot}
+                  {list.map((a) => {
+                    const isMuted =
+                      a.status === "CANCELLED" || a.status === "NO_SHOW";
+                    const canAct =
+                      a.status === "SCHEDULED" || a.status === "CONFIRMED";
+                    return (
+                      <motion.li
+                        key={a.id}
+                        variants={{
+                          initial: { opacity: 0, y: 6 },
+                          animate: { opacity: 1, y: 0 },
+                        }}
+                        className={cn(
+                          "rounded-xl border bg-card p-4",
+                          STATUS_COLOR[a.status],
+                          isMuted && "opacity-60",
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-xs font-mono font-semibold">
+                              {a.timeSlot}
+                            </div>
+                            <div className="mt-0.5 truncate font-medium">
+                              {a.patientName}
+                            </div>
+                            <div className="truncate text-xs text-muted-foreground">
+                              {a.patientPhone}
+                            </div>
+                            <div className="mt-1 truncate text-xs">
+                              {doctorById.get(a.doctorId)?.name ?? "Doctor"}
+                            </div>
                           </div>
-                          <div className="mt-0.5 truncate font-medium">
-                            {a.patientName}
-                          </div>
-                          <div className="truncate text-xs text-muted-foreground">
-                            {a.patientPhone}
-                          </div>
-                          <div className="mt-1 truncate text-xs">
-                            {doctorById.get(a.doctorId)?.name ?? "Doctor"}
-                          </div>
+                          <Badge variant="secondary" className="text-[10px]">
+                            {a.status.replace("_", " ")}
+                          </Badge>
                         </div>
-                        <Badge variant="secondary" className="text-[10px]">
-                          {a.status.replace("_", " ")}
-                        </Badge>
-                      </div>
-                      {a.bookedVia === "ONLINE" && (
-                        <Badge
-                          variant="secondary"
-                          className="mt-2 text-[10px]"
-                        >
-                          online booking
-                        </Badge>
-                      )}
-                      {(a.status === "SCHEDULED" ||
-                        a.status === "CONFIRMED") && (
-                        <div className="mt-2 flex gap-1.5">
-                          <Button
-                            size="xs"
-                            variant="outline"
-                            onClick={() => {
-                              if (a.patientId) {
-                                patch(
-                                  a.id,
-                                  { checkIn: true },
-                                  "Checked in — token created",
-                                );
-                              } else {
-                                setCheckInAppt(a);
-                              }
-                            }}
-                            disabled={busyId === a.id}
+                        {a.bookedVia === "ONLINE" && (
+                          <Badge
+                            variant="secondary"
+                            className="mt-2 text-[10px]"
                           >
-                            <Check className="mr-1 h-3 w-3" />
-                            Check in
-                          </Button>
-                          <Button
-                            size="xs"
-                            variant="ghost"
-                            onClick={() =>
-                              patch(
-                                a.id,
-                                { status: "CANCELLED" },
-                                "Appointment cancelled",
-                              )
-                            }
-                            disabled={busyId === a.id}
-                          >
-                            <X className="mr-1 h-3 w-3" />
-                            Cancel
-                          </Button>
-                        </div>
-                      )}
-                    </motion.li>
-                  ))}
+                            online booking
+                          </Badge>
+                        )}
+                        {canAct && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              onClick={() => {
+                                if (a.patientId) {
+                                  patch(
+                                    a.id,
+                                    { checkIn: true },
+                                    "Checked in — token created",
+                                  );
+                                } else {
+                                  setCheckInAppt(a);
+                                }
+                              }}
+                              disabled={busyId === a.id}
+                            >
+                              <Check className="mr-1 h-3 w-3" />
+                              Check in
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="outline"
+                              title="Send WhatsApp reminder"
+                              onClick={() => sendReminder(a)}
+                              disabled={busyId === a.id}
+                            >
+                              <MessageCircle className="mr-1 h-3 w-3" />
+                              Remind
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => markNoShow(a)}
+                              disabled={busyId === a.id}
+                            >
+                              <UserX className="mr-1 h-3 w-3" />
+                              No-show
+                            </Button>
+                            <Button
+                              size="xs"
+                              variant="ghost"
+                              onClick={() => cancelAppointment(a)}
+                              disabled={busyId === a.id}
+                            >
+                              <X className="mr-1 h-3 w-3" />
+                              Cancel
+                            </Button>
+                            {/* TODO: reschedule — defer for v2; needs a slot
+                                picker dialog and a PATCH that revalidates the
+                                same race-free slot lock the create path uses. */}
+                          </div>
+                        )}
+                      </motion.li>
+                    );
+                  })}
                 </motion.ul>
               </section>
             );

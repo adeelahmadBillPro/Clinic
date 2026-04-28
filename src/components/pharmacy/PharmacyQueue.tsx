@@ -3,8 +3,9 @@
 import { useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, RefreshCcw, Search, X } from "lucide-react";
+import { Loader2, RefreshCcw, Search, X, Pill } from "lucide-react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Tabs,
   TabsContent,
@@ -154,11 +155,19 @@ export function PharmacyQueue() {
           </TabsList>
           <TabsContent value={tab} className="mt-3">
             {filtered.length === 0 ? (
-              <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                {query
-                  ? `No match for "${query}".`
-                  : "No prescriptions in this view."}
-              </div>
+              query ? (
+                <EmptyState
+                  icon={Search}
+                  title={`No match for "${query}"`}
+                  description="Try a different prescription number, MRN, or patient name."
+                />
+              ) : (
+                <EmptyState
+                  icon={Pill}
+                  title="No pending prescriptions"
+                  description="Prescriptions issued by doctors will appear here ready to dispense."
+                />
+              )
             ) : (
               <motion.ul
                 initial="initial"

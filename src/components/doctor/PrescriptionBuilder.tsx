@@ -322,67 +322,67 @@ export function PrescriptionBuilder({
         </AnimatePresence>
       </div>
 
-      {/* Manual add + Templates row */}
-      <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
-        <div className="flex items-center gap-2">
-          <Input
-            value={manualName}
-            onChange={(e) => setManualName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addManual();
-              }
-            }}
-            placeholder="Not in inventory? Type any medicine name and press Enter"
-            className="h-10"
-          />
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={addManual}
-            disabled={!manualName.trim()}
-            className="shrink-0"
-          >
-            <Plus className="mr-1 h-3.5 w-3.5" />
-            Add
-          </Button>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5 lg:justify-end">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Presets
-          </span>
-          {Object.entries(TEMPLATES).map(([key, tpl]) => {
-            const Icon = tpl.icon;
-            return (
-              <Button
-                key={key}
-                type="button"
-                size="xs"
-                variant="outline"
-                onClick={() => applyTemplate(key as keyof typeof TEMPLATES)}
-                className="gap-1"
-              >
-                <Icon className="h-3 w-3" />
-                {tpl.label}
-              </Button>
-            );
-          })}
-          {userId && (
-            <>
-              <span className="mx-1 h-4 w-px bg-border" aria-hidden />
-              <RxTemplatesMenu
-                userId={userId}
-                currentItems={value}
-                onApply={(items) => {
-                  onChange([...value, ...items]);
-                  setExpanded(value.length);
-                }}
-              />
-            </>
-          )}
-        </div>
+      {/* Presets row — common combos surface above the manual input so
+          doctors find them first. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Quick presets
+        </span>
+        {Object.entries(TEMPLATES).map(([key, tpl]) => {
+          const Icon = tpl.icon;
+          return (
+            <Button
+              key={key}
+              type="button"
+              size="xs"
+              variant="outline"
+              onClick={() => applyTemplate(key as keyof typeof TEMPLATES)}
+              className="gap-1"
+            >
+              <Icon className="h-3 w-3" />
+              {tpl.label}
+            </Button>
+          );
+        })}
+        {userId && (
+          <>
+            <span className="mx-1 h-4 w-px bg-border" aria-hidden />
+            <RxTemplatesMenu
+              userId={userId}
+              currentItems={value}
+              onApply={(items) => {
+                onChange([...value, ...items]);
+                setExpanded(value.length);
+              }}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Manual add — for medicines not in inventory. */}
+      <div className="flex items-center gap-2">
+        <Input
+          value={manualName}
+          onChange={(e) => setManualName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addManual();
+            }
+          }}
+          placeholder="Not in inventory? Type any medicine name and press Enter"
+          className="h-10"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          onClick={addManual}
+          disabled={!manualName.trim()}
+          className="h-10 shrink-0 px-4"
+        >
+          <Plus className="mr-1 h-3.5 w-3.5" />
+          Add medicine
+        </Button>
       </div>
 
       {/* Allergy warning banner */}

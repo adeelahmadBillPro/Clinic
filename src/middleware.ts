@@ -10,6 +10,12 @@ const PUBLIC_PATHS = new Set([
   "/register",
   "/forgot-password",
   "/reset-password",
+  // P2-14: email verification landing page — unauthenticated by design,
+  // the whole point is to let a fresh signup activate before logging in.
+  "/verify-email",
+  // P4-51: T&C + privacy stubs, linked from the register form.
+  "/terms",
+  "/privacy",
 ]);
 
 function isPublic(pathname: string): boolean {
@@ -21,6 +27,7 @@ function isPublic(pathname: string): boolean {
   if (pathname.startsWith("/_next")) return true;
   if (pathname.startsWith("/api/auth")) return true;
   if (pathname.startsWith("/api/register")) return true;
+  if (pathname.startsWith("/api/verify-email")) return true;
   if (pathname.startsWith("/api/forgot-password")) return true;
   if (pathname.startsWith("/api/reset-password")) return true;
   if (pathname.startsWith("/api/reviews")) return true;

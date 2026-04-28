@@ -13,10 +13,11 @@ import {
 } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Printer, Pill } from "lucide-react";
 import { DeletePatientButton } from "@/components/patients/DeletePatientButton";
 import { EditPatientDialog } from "@/components/patients/EditPatientDialog";
 import { PatientActivityTimeline } from "@/components/patients/PatientActivityTimeline";
+import { PatientTokensList } from "@/components/patients/PatientTokensList";
 import { isAdmin } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
@@ -56,7 +57,13 @@ export default async function PatientEmrPage({
   );
 
   const t = db(session.user.clinicId);
-  const patient = await t.patient.findUnique({ where: { id: patientId } });
+  const [patient, clinic] = await Promise.all([
+    t.patient.findUnique({ where: { id: patientId } }),
+    prisma.clinic.findUnique({
+      where: { id: session.user.clinicId },
+      select: { name: true },
+    }),
+  ]);
   if (!patient) notFound();
 
   const [tokens, consultations, prescriptions, bills, vitals] = await Promise.all([
@@ -252,31 +259,19 @@ export default async function PatientEmrPage({
             <CardTitle className="text-sm">Recent tokens</CardTitle>
           </CardHeader>
           <CardContent>
-            {tokens.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                This patient has no visits yet.
-              </p>
-            ) : (
-              <ul className="space-y-1.5 text-sm">
-                {tokens.map((t) => (
-                  <li
-                    key={t.id}
-                    className="flex items-center justify-between gap-3"
-                  >
-                    <span className="font-mono text-xs">{t.displayToken}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {doctorNameById.get(t.doctorId) ?? "Doctor"}
-                    </span>
-                    <Badge variant="secondary" className="text-[10px]">
-                      {t.status}
-                    </Badge>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(t.issuedAt).toLocaleDateString()}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <PatientTokensList
+              tokens={tokens.map((tk) => ({
+                id: tk.id,
+                displayToken: tk.displayToken,
+                status: tk.status,
+                issuedAt: tk.issuedAt.toISOString(),
+                expiresAt: tk.expiresAt.toISOString(),
+                doctorName: doctorNameById.get(tk.doctorId) ?? "Doctor",
+              }))}
+              patientName={patient.name}
+              patientPhone={patient.phone}
+              clinicName={clinic?.name ?? "ClinicOS"}
+            />
           </CardContent>
         </Card>
 
@@ -318,7 +313,10 @@ export default async function PatientEmrPage({
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Recent prescriptions</CardTitle>
+            <CardTitle className="flex items-center gap-1.5 text-sm">
+              <Pill className="h-3.5 w-3.5 text-muted-foreground" />
+              Recent prescriptions
+            </CardTitle>
           </CardHeader>
           <CardContent>
             {prescriptions.length === 0 ? (
@@ -330,26 +328,30 @@ export default async function PatientEmrPage({
                     ? (r.medicines as Array<{ name?: string }>)
                     : [];
                   return (
-                    <li key={r.id} className="border-b pb-2 last:border-0">
+                    <li
+                      key={r.id}
+                      className="flex items-start justify-between gap-2 border-b pb-2 last:border-0"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(r.createdAt).toLocaleDateString()} ·{" "}
+                          {r.status}
+                        </div>
+                        <div className="truncate text-xs">
+                          {meds
+                            .map((m) => m?.name)
+                            .filter(Boolean)
+                            .join(", ") || "—"}
+                        </div>
+                      </div>
                       <Link
                         href={`/prescriptions/${r.id}`}
-                        className="group flex items-start justify-between gap-2 rounded-md -mx-1 px-1 py-0.5 transition hover:bg-accent/40"
+                        target="_blank"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground transition hover:border-primary/40 hover:text-primary"
+                        title="Reprint prescription (slip gum ho gayi to dobara print karein)"
                       >
-                        <div className="min-w-0 flex-1">
-                          <div className="text-xs text-muted-foreground">
-                            {new Date(r.createdAt).toLocaleDateString()} ·{" "}
-                            {r.status}
-                          </div>
-                          <div className="truncate text-xs">
-                            {meds
-                              .map((m) => m?.name)
-                              .filter(Boolean)
-                              .join(", ") || "—"}
-                          </div>
-                        </div>
-                        <span className="shrink-0 text-[11px] font-medium text-primary opacity-0 transition group-hover:opacity-100">
-                          Open →
-                        </span>
+                        <Printer className="h-3 w-3" />
+                        Print
                       </Link>
                     </li>
                   );

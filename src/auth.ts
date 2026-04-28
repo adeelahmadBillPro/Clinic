@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { CredentialsSignin } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import type { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -9,7 +9,14 @@ import { authConfig } from "./auth.config";
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 
-export class AuthError extends Error {
+/**
+ * Extend NextAuth v5's `CredentialsSignin` so `res.code` surfaces our
+ * specific reason on the client (`LoginForm` reads `res.code` to show
+ * "Please verify your email" vs "Invalid email or password" vs
+ * "Account locked"). A generic `Error` would just come through as
+ * `code: "credentials"` and every reason would look the same.
+ */
+export class AuthError extends CredentialsSignin {
   code: string;
   meta?: Record<string, unknown>;
   constructor(code: string, message: string, meta?: Record<string, unknown>) {
@@ -74,18 +81,31 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const { email, password } = parsed.data;
 
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user || !user.isActive) {
+        // Don't leak existence — user-not-found and user-deactivated both
+        // get the generic message. But "exists + correct password +
+        // unverified" gets the specific verification prompt so a freshly
+        // registered user understands why they can't sign in yet.
+        if (!user) {
           throw new AuthError(
             "INVALID_CREDENTIALS",
             "Invalid email or password",
           );
         }
-        // Block unverified signups — prevents using a freshly registered
-        // account before the verification link has been clicked.
         if (!user.emailVerifiedAt) {
+          // Note: we check this before isActive specifically because a
+          // freshly registered user has isActive=false until verified.
+          // Falling through to the isActive check would surface the
+          // generic "Invalid email or password" instead of the helpful
+          // "verify your email" prompt.
           throw new AuthError(
             "EMAIL_NOT_VERIFIED",
             "Please verify your email first. Check your inbox for the link.",
+          );
+        }
+        if (!user.isActive) {
+          throw new AuthError(
+            "INVALID_CREDENTIALS",
+            "Invalid email or password",
           );
         }
 

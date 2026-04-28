@@ -20,20 +20,25 @@ export const diagnosisSchema = z.object({
 export type DiagnosisItem = z.infer<typeof diagnosisSchema>;
 
 // Physiological bounds. Reject impossible values so typos don't become
-// records, and so the BMI calc below can trust its inputs.
+// records, and so the BMI calc below can trust its inputs. Error
+// messages name the field explicitly because they bubble through the
+// API's first-issue toast — without the field name the staff has no
+// idea what to fix.
+// Doctor-friendly: no blocking bounds. Whatever the doctor measured,
+// the system accepts. Only sanity-floor at >= 0 to keep negatives out
+// of the chart. Range hints in the UI are guidance, not enforcement.
 export const vitalsSchema = z.object({
   bp: z
     .string()
     .trim()
-    .regex(/^\d{2,3}\/\d{2,3}$/, "BP like 120/80")
     .optional()
     .or(z.literal("")),
-  pulse: z.coerce.number().int().min(30).max(250).optional(),
-  temperature: z.coerce.number().min(30).max(45).optional(),
-  weight: z.coerce.number().min(0.5).max(500).optional(),
-  height: z.coerce.number().min(30).max(260).optional(),
-  spO2: z.coerce.number().int().min(50).max(100).optional(),
-  bloodSugar: z.coerce.number().min(20).max(800).optional(),
+  pulse: z.coerce.number().nonnegative().optional(),
+  temperature: z.coerce.number().nonnegative().optional(),
+  weight: z.coerce.number().nonnegative().optional(),
+  height: z.coerce.number().nonnegative().optional(),
+  spO2: z.coerce.number().nonnegative().optional(),
+  bloodSugar: z.coerce.number().nonnegative().optional(),
 });
 export type VitalsInput = z.infer<typeof vitalsSchema>;
 

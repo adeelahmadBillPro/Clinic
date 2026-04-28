@@ -20,7 +20,7 @@ export default async function SuppliersPage() {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Suppliers</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Keep supplier contacts for fast purchase orders.
+          Manage your medicine suppliers.
         </p>
       </div>
       <SuppliersClient initial={suppliers} />

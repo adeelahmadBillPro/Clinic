@@ -93,9 +93,14 @@ export function EditStockDialog({
     if (!ok) return;
     setSubmitting(true);
     try {
-      await fetch(`/api/inventory/medicines/${medicine.id}`, {
+      const res = await fetch(`/api/inventory/medicines/${medicine.id}`, {
         method: "DELETE",
       });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok || !body?.success) {
+        toast.error(body?.error ?? "Could not deactivate medicine");
+        return;
+      }
       toast.success("Medicine deactivated");
       onSaved();
     } finally {

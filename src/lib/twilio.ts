@@ -100,16 +100,55 @@ export function tokenCalledMessage({
   return `${clinicName}: Your token ${displayToken} is now called. Please proceed to ${doctorName}${room}.${OPT_OUT_TAIL}`;
 }
 
+/**
+ * Format a date + time slot for a patient-facing message. Day-precision
+ * ISO date + "HH:MM" slot keeps the locale presentation under our
+ * control (ditches seconds, reads naturally).
+ */
+function formatWhen(date: Date, timeSlot: string): string {
+  const day = date.toLocaleDateString(undefined, {
+    weekday: "short",
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+  return `${day} at ${timeSlot}`;
+}
+
+export function appointmentConfirmationMessage({
+  clinicName,
+  patientName,
+  doctorName,
+  date,
+  timeSlot,
+}: {
+  clinicName: string;
+  patientName: string;
+  doctorName: string;
+  date: Date;
+  timeSlot: string;
+}) {
+  return `Hi ${patientName}, your appointment with Dr. ${doctorName} on ${formatWhen(
+    date,
+    timeSlot,
+  )} at ${clinicName} is confirmed.${OPT_OUT_TAIL}`;
+}
+
 export function appointmentReminderMessage({
   clinicName,
   doctorName,
-  when,
+  date,
+  timeSlot,
 }: {
   clinicName: string;
   doctorName: string;
-  when: Date;
+  date: Date;
+  timeSlot: string;
 }) {
-  return `${clinicName}: Reminder — appointment with ${doctorName} on ${when.toLocaleString()}.${OPT_OUT_TAIL}`;
+  return `Reminder: your appointment with Dr. ${doctorName} is on ${formatWhen(
+    date,
+    timeSlot,
+  )} at ${clinicName}.${OPT_OUT_TAIL}`;
 }
 
 export function labReadyMessage({

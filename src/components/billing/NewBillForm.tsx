@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { FieldHelp } from "@/components/shared/FieldHelp";
 import { cn } from "@/lib/utils";
 
 type LineItem = { id: number; description: string; qty: number; unitPrice: number };
@@ -163,6 +164,11 @@ export function NewBillForm() {
             <div>
               <Label className="text-xs text-muted-foreground">
                 Bill type
+                <FieldHelp>
+                  OPD = consultation fee. PHARMACY = medicines. LAB = test
+                  charges. IPD = bed + admission charges. Pick the closest
+                  match — analytics groups revenue by type.
+                </FieldHelp>
               </Label>
               <Select
                 value={billType}
@@ -277,6 +283,12 @@ export function NewBillForm() {
             <div>
               <Label className="text-[11px] text-muted-foreground">
                 Reason (required when discount &gt; 0)
+                <FieldHelp>
+                  Required when discount &gt; 0. Common: &lsquo;Senior
+                  citizen&rsquo;, &lsquo;Staff family&rsquo;,
+                  &lsquo;Goodwill&rsquo;, &lsquo;Charity case&rsquo;. Shows in
+                  audit log.
+                </FieldHelp>
               </Label>
               <Input
                 value={discountReason}
@@ -292,7 +304,13 @@ export function NewBillForm() {
           <div className="mb-3 text-sm font-semibold">Payment</div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
-              <Label className="text-xs">Method</Label>
+              <Label className="text-xs">
+                Method
+                <FieldHelp>
+                  How the patient is paying right now. INSURANCE / PANEL =
+                  company will reimburse you later, balance stays open.
+                </FieldHelp>
+              </Label>
               <Select
                 value={paymentMethod}
                 onValueChange={(v) =>
@@ -352,6 +370,11 @@ export function NewBillForm() {
               <div>
                 <Label className="text-[11px] text-muted-foreground">
                   Coverage %
+                  <FieldHelp>
+                    What percentage of the total the insurance company
+                    covers. The rest is patient responsibility (shown as
+                    &lsquo;patient portion&rsquo; on the bill).
+                  </FieldHelp>
                 </Label>
                 <Input
                   type="number"

@@ -58,8 +58,7 @@ export default async function StaffPage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Staff</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add doctors, receptionists, nurses, pharmacists, and other team
-            members. Toggle on-duty status anytime.
+            Add doctors, nurses and reception staff.
           </p>
         </div>
         <AddStaffTrigger autoOpen={autoOpen} />

@@ -1,10 +1,16 @@
 import { NextResponse } from "next/server";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
 import { z } from "zod";
 import { nameSchema, phoneSchema } from "@/lib/validations/common";
 import { requireApiRole } from "@/lib/api-guards";
+import { runAfterResponse } from "@/lib/background";
+import {
+  sendWhatsApp,
+  appointmentConfirmationMessage,
+} from "@/lib/twilio";
 
 const schema = z.object({
   patientId: z.string().optional(),
@@ -41,14 +47,27 @@ export async function GET(req: Request) {
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
   const doctorId = url.searchParams.get("doctorId");
+  const status = url.searchParams.get("status");
+  const q = url.searchParams.get("q")?.trim();
   const t = db(session.user.clinicId);
   const where: Record<string, unknown> = {};
-  if (from && to)
-    where.appointmentDate = { gte: new Date(from), lte: new Date(to) };
+  if (from || to) {
+    const range: Record<string, Date> = {};
+    if (from) range.gte = new Date(from);
+    if (to) range.lte = new Date(to);
+    where.appointmentDate = range;
+  }
   if (doctorId) where.doctorId = doctorId;
+  if (status) where.status = status;
+  if (q) {
+    where.OR = [
+      { patientName: { contains: q, mode: "insensitive" } },
+      { patientPhone: { contains: q } },
+    ];
+  }
   const appts = await t.appointment.findMany({
     where,
-    orderBy: { appointmentDate: "asc" },
+    orderBy: [{ appointmentDate: "asc" }, { timeSlot: "asc" }],
     take: 200,
   });
   return NextResponse.json({
@@ -167,6 +186,56 @@ export async function POST(req: Request) {
 
   revalidatePath("/appointments");
   revalidatePath("/reception");
+
+  // Fire-and-forget WhatsApp confirmation. Respect opt-out for linked
+  // patients; walk-ins (no patientId) don't have an opt-out flag and
+  // implicitly consent by booking.
+  const clinicId = session.user.clinicId;
+  const createdAppt = appt;
+  runAfterResponse(async () => {
+    if (!createdAppt.patientPhone) return;
+    if (createdAppt.patientId) {
+      const patient = await db(clinicId).patient.findUnique({
+        where: { id: createdAppt.patientId },
+        select: { optOutWhatsApp: true },
+      });
+      if (patient?.optOutWhatsApp) return;
+    }
+    const [doctor, clinic] = await Promise.all([
+      db(clinicId).doctor.findUnique({
+        where: { id: createdAppt.doctorId },
+        select: { userId: true },
+      }),
+      prisma.clinic.findUnique({
+        where: { id: clinicId },
+        select: { name: true },
+      }),
+    ]);
+    if (!doctor || !clinic) return;
+    const doctorUser = await prisma.user.findUnique({
+      where: { id: doctor.userId },
+      select: { name: true },
+    });
+    const msg = appointmentConfirmationMessage({
+      clinicName: clinic.name,
+      patientName: createdAppt.patientName,
+      doctorName: doctorUser?.name ?? "your doctor",
+      date: createdAppt.appointmentDate,
+      timeSlot: createdAppt.timeSlot,
+    });
+    await sendWhatsApp(createdAppt.patientPhone, msg);
+    await db(clinicId).notification.create({
+      data: {
+        clinicId,
+        patientId: createdAppt.patientId ?? null,
+        type: "APPOINTMENT_CONFIRMED",
+        channel: "WHATSAPP",
+        message: msg,
+        status: "SENT",
+        sentAt: new Date(),
+      },
+    });
+  });
 
   return NextResponse.json({
     success: true,

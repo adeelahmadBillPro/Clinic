@@ -15,6 +15,11 @@ import {
   UserPlus,
   BadgeDollarSign,
   AlertTriangle,
+  TestTube,
+  CheckCircle2,
+  FlaskConical,
+  BedDouble,
+  ClipboardList,
 } from "lucide-react";
 
 type DoctorStats = {
@@ -50,7 +55,29 @@ type AdminStats = {
   outstandingDues: number;
 };
 
-type Stats = DoctorStats | ReceptionStats | PharmacyStats | AdminStats;
+type LabStats = {
+  role: "LAB_TECH";
+  pendingSamples: number;
+  inProgress: number;
+  completedToday: number;
+  ordersToday: number;
+};
+
+type NurseStats = {
+  role: "NURSE";
+  admittedCount: number;
+  freeBeds: number;
+  totalBeds: number;
+  notesToday: number;
+};
+
+type Stats =
+  | DoctorStats
+  | ReceptionStats
+  | PharmacyStats
+  | AdminStats
+  | LabStats
+  | NurseStats;
 
 function money(n: number) {
   return `₨ ${Math.round(n).toLocaleString()}`;
@@ -109,6 +136,8 @@ export function MyDayCard() {
       {stats.role === "RECEPTIONIST" && <ReceptionBlock s={stats} />}
       {stats.role === "PHARMACIST" && <PharmacyBlock s={stats} />}
       {stats.role === "ADMIN" && <AdminBlock s={stats} />}
+      {stats.role === "LAB_TECH" && <LabBlock s={stats} />}
+      {stats.role === "NURSE" && <NurseBlock s={stats} />}
     </motion.div>
   );
 }
@@ -332,5 +361,81 @@ function AdminBlock({ s }: { s: AdminStats }) {
         tone="warning"
       />
     </div>
+  );
+}
+
+function LabBlock({ s }: { s: LabStats }) {
+  return (
+    <>
+      <div className="grid gap-2 sm:grid-cols-4">
+        <Kpi
+          icon={<TestTube />}
+          label="Awaiting sample"
+          value={s.pendingSamples}
+          tone={s.pendingSamples > 0 ? "warning" : "default"}
+        />
+        <Kpi
+          icon={<FlaskConical />}
+          label="In progress"
+          value={s.inProgress}
+          tone="info"
+        />
+        <Kpi
+          icon={<CheckCircle2 />}
+          label="Completed today"
+          value={s.completedToday}
+          tone="success"
+        />
+        <Kpi
+          icon={<ClipboardList />}
+          label="Orders today"
+          value={s.ordersToday}
+        />
+      </div>
+      {s.pendingSamples > 0 && (
+        <div className="mt-2 rounded-md border border-dashed bg-amber-500/10 p-2 text-[11px] text-amber-800">
+          {s.pendingSamples} order{s.pendingSamples === 1 ? "" : "s"} waiting
+          for sample collection — start with the oldest.
+        </div>
+      )}
+    </>
+  );
+}
+
+function NurseBlock({ s }: { s: NurseStats }) {
+  const occupancy =
+    s.totalBeds > 0 ? Math.round((1 - s.freeBeds / s.totalBeds) * 100) : 0;
+  return (
+    <>
+      <div className="grid gap-2 sm:grid-cols-4">
+        <Kpi
+          icon={<BedDouble />}
+          label="Admitted"
+          value={s.admittedCount}
+          tone="info"
+        />
+        <Kpi
+          icon={<BedDouble />}
+          label="Free beds"
+          value={`${s.freeBeds}/${s.totalBeds}`}
+          tone={s.freeBeds === 0 ? "warning" : "success"}
+        />
+        <Kpi
+          icon={<TrendingUp />}
+          label="Occupancy"
+          value={`${occupancy}%`}
+        />
+        <Kpi
+          icon={<ClipboardList />}
+          label="My notes today"
+          value={s.notesToday}
+        />
+      </div>
+      {s.totalBeds === 0 && (
+        <div className="mt-2 rounded-md border border-dashed bg-muted/30 p-2 text-[11px] text-muted-foreground">
+          Tip: Set up beds and wards from IPD → Manage beds.
+        </div>
+      )}
+    </>
   );
 }

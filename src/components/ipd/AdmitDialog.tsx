@@ -27,6 +27,7 @@ import {
   PatientSearch,
   type PatientHit,
 } from "@/components/patients/PatientSearch";
+import { FieldHelp } from "@/components/shared/FieldHelp";
 
 type Bed = {
   id: string;
@@ -169,7 +170,13 @@ export function AdmitDialog({
             </Select>
           </div>
           <div>
-            <Label>Admission diagnosis</Label>
+            <Label>
+              Admission diagnosis
+              <FieldHelp>
+                Working diagnosis at admission. Refines during the stay; the
+                discharge summary captures the final.
+              </FieldHelp>
+            </Label>
             <Textarea
               rows={2}
               value={diagnosis}

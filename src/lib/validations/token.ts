@@ -19,6 +19,11 @@ export const issueTokenSchema = z.object({
     .enum(["CASH", "CARD", "ONLINE", "INSURANCE", "PANEL"])
     .optional(),
   feePaid: z.boolean().optional(),
+  // Receptionist confirms after the multi-doctor warning ("This patient
+  // saw Dr. X today — issue another token to Dr. Y?"). Without this flag
+  // the API returns 409 with code MULTI_VISIT_CONFIRM and the previous
+  // token's metadata.
+  acknowledgeMultiVisit: z.boolean().optional(),
 });
 
 export type IssueTokenInput = z.infer<typeof issueTokenSchema>;

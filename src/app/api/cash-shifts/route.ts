@@ -92,21 +92,45 @@ export async function POST(req: Request) {
       ? "SUBMITTED"
       : "FLAGGED";
 
-  const shift = await t.cashShift.create({
-    data: {
-      clinicId,
-      userId: session.user.id,
-      shiftDate: today,
-      shiftType: parsed.data.shiftType,
-      openingBalance: parsed.data.openingBalance,
-      totalCollected,
-      declaredCash: declared,
-      difference,
-      status,
-      notes: parsed.data.notes ?? null,
-      submittedAt: new Date(),
-    },
+  // If there's an OPEN shift for this user, close it (update in place).
+  // Otherwise create a new SUBMITTED row. Without this, the OPEN row from
+  // /api/cash-shifts/open hangs forever and the user can't start a new
+  // shift the next day.
+  const open = await t.cashShift.findFirst({
+    where: { userId: session.user.id, status: "OPEN" },
   });
+  let shift;
+  if (open) {
+    shift = await t.cashShift.update({
+      where: { id: open.id },
+      data: {
+        shiftType: parsed.data.shiftType,
+        openingBalance: parsed.data.openingBalance,
+        totalCollected,
+        declaredCash: declared,
+        difference,
+        status,
+        notes: parsed.data.notes ?? null,
+        submittedAt: new Date(),
+      },
+    });
+  } else {
+    shift = await t.cashShift.create({
+      data: {
+        clinicId,
+        userId: session.user.id,
+        shiftDate: today,
+        shiftType: parsed.data.shiftType,
+        openingBalance: parsed.data.openingBalance,
+        totalCollected,
+        declaredCash: declared,
+        difference,
+        status,
+        notes: parsed.data.notes ?? null,
+        submittedAt: new Date(),
+      },
+    });
+  }
 
   return NextResponse.json({
     success: true,

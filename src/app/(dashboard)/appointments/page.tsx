@@ -30,6 +30,9 @@ export default async function AppointmentsPage() {
     specialization: d.specialization,
   }));
 
+  // Server-render the default view (today → +14d) so the page paints
+  // instantly. The client component owns search/filter and refetches via
+  // /api/appointments when the user changes anything.
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const weekFromNow = new Date(today);
@@ -40,6 +43,7 @@ export default async function AppointmentsPage() {
       appointmentDate: { gte: today, lte: weekFromNow },
     },
     orderBy: [{ appointmentDate: "asc" }, { timeSlot: "asc" }],
+    take: 200,
   });
 
   return (
@@ -48,7 +52,10 @@ export default async function AppointmentsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Appointments</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {appts.length} upcoming in the next 2 weeks.
+            Upcoming appointments. Public booking link below.{" "}
+            <span className="text-foreground/70">
+              {appts.length} in the next 2 weeks.
+            </span>
           </p>
         </div>
         {clinic?.slug && (

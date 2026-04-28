@@ -3,8 +3,9 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { BedDouble, Plus, Loader2 } from "lucide-react";
+import { BedDouble, Plus, Loader2, Bed } from "lucide-react";
 import { toast } from "sonner";
+import { EmptyState } from "@/components/shared/EmptyState";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -29,6 +30,7 @@ import {
 import { AdmitDialog } from "./AdmitDialog";
 import { DischargeDialog } from "./DischargeDialog";
 import { KpiCard } from "@/components/dashboard/KpiCard";
+import { FieldHelp } from "@/components/shared/FieldHelp";
 import { cn } from "@/lib/utils";
 
 type Bed = {
@@ -48,7 +50,13 @@ const TYPE_COLOR: Record<string, string> = {
   ICU: "bg-destructive/10 text-destructive",
 };
 
-export function IpdOverview({ beds }: { beds: Bed[] }) {
+export function IpdOverview({
+  beds,
+  canManageBeds = true,
+}: {
+  beds: Bed[];
+  canManageBeds?: boolean;
+}) {
   const router = useRouter();
   const [admitBed, setAdmitBed] = useState<Bed | null>(null);
   const [discharge, setDischarge] = useState<Bed | null>(null);
@@ -130,6 +138,7 @@ export function IpdOverview({ beds }: { beds: Bed[] }) {
       </div>
 
       <div className="flex justify-end">
+        {canManageBeds && (
         <Dialog open={addOpen} onOpenChange={setAddOpen}>
           <DialogTrigger asChild>
             <Button size="sm">
@@ -165,7 +174,13 @@ export function IpdOverview({ beds }: { beds: Bed[] }) {
                 />
               </div>
               <div>
-                <Label>Type</Label>
+                <Label>
+                  Type
+                  <FieldHelp>
+                    Affects daily rate and patient expectations. ICU implies
+                    higher staffing ratio.
+                  </FieldHelp>
+                </Label>
                 <Select
                   value={bedForm.bedType}
                   onValueChange={(v) =>
@@ -184,7 +199,13 @@ export function IpdOverview({ beds }: { beds: Bed[] }) {
                 </Select>
               </div>
               <div>
-                <Label>Daily rate (₨)</Label>
+                <Label>
+                  Daily rate (₨)
+                  <FieldHelp>
+                    Per-day bed charge. The discharge bill multiplies this
+                    by the number of days admitted.
+                  </FieldHelp>
+                </Label>
                 <Input
                   type="number"
                   min={0}
@@ -214,12 +235,21 @@ export function IpdOverview({ beds }: { beds: Bed[] }) {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        )}
       </div>
 
       {beds.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No beds configured yet. Add your first bed to get started.
-        </div>
+        <EmptyState
+          icon={Bed}
+          title="No bed setup yet"
+          description={
+            canManageBeds
+              ? "Add your first bed to start admitting patients. You can group beds by ward and set daily rates per bed type."
+              : "Beds haven't been configured yet. Ask an owner or admin to add beds before admitting patients."
+          }
+          actionLabel={canManageBeds ? "Add a bed" : undefined}
+          onAction={canManageBeds ? () => setAddOpen(true) : undefined}
+        />
       ) : (
         <div className="space-y-6">
           {wards.map(([ward, wardBeds]) => (

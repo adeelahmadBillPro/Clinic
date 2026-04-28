@@ -79,8 +79,14 @@ export default async function BillingPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            ₨ {Math.round(Number(todaySum._sum.paidAmount ?? 0)).toLocaleString()}{" "}
-            collected today · {pendingCount} bills with pending balance.
+            All bills across OPD, pharmacy, lab and IPD.{" "}
+            <span className="text-foreground/70">
+              ₨{" "}
+              {Math.round(
+                Number(todaySum._sum.paidAmount ?? 0),
+              ).toLocaleString()}{" "}
+              today · {pendingCount} pending.
+            </span>
           </p>
         </div>
         <Link href="/billing/new" className={cn(buttonVariants())}>

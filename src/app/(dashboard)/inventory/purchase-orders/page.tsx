@@ -49,7 +49,7 @@ export default async function PurchaseOrdersPage() {
           Purchase orders
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Track orders to suppliers and receive goods into stock.
+          Track stock orders sent to suppliers.
         </p>
       </div>
       <PurchaseOrdersClient

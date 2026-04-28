@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FieldHelp } from "@/components/shared/FieldHelp";
 
 const MODULES = [
   {
@@ -206,7 +207,14 @@ export function SettingsPanel({
           <CardContent>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
-                <Label>Timezone</Label>
+                <Label>
+                  Timezone
+                  <FieldHelp>
+                    Used for token reset time, doctor schedules, and report
+                    date ranges. If you change this mid-day, in-flight
+                    tokens stay on the old day.
+                  </FieldHelp>
+                </Label>
                 <Input
                   value={form.timezone}
                   onChange={(e) =>
@@ -234,7 +242,14 @@ export function SettingsPanel({
                 </Select>
               </div>
               <div>
-                <Label>Token reset time</Label>
+                <Label>
+                  Token reset time
+                  <FieldHelp>
+                    Time-of-day when token numbers reset to 1 for each
+                    doctor. 00:00 = each calendar day starts fresh; 06:00 =
+                    night-shift queues continue from last evening.
+                  </FieldHelp>
+                </Label>
                 <Input
                   type="time"
                   value={form.tokenResetTime}
@@ -245,7 +260,13 @@ export function SettingsPanel({
                 />
               </div>
               <div>
-                <Label>Currency</Label>
+                <Label>
+                  Currency
+                  <FieldHelp>
+                    Display only. Affects symbol prefix on bills (₨, $,
+                    etc.). Doesn&rsquo;t convert amounts.
+                  </FieldHelp>
+                </Label>
                 <Input
                   value={form.currency}
                   onChange={(e) =>

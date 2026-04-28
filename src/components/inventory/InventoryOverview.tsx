@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Search, AlertTriangle } from "lucide-react";
+import { Search, AlertTriangle, Package } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import { useRouter } from "next/navigation";
 
 import {
@@ -173,9 +174,19 @@ export function InventoryOverview({
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No medicines match.
-        </div>
+        medicines.length === 0 ? (
+          <EmptyState
+            icon={Package}
+            title="No medicines yet"
+            description="Add your first medicine using the Add medicine button above. You can also import from a purchase order."
+          />
+        ) : (
+          <EmptyState
+            icon={Search}
+            title="No medicines match"
+            description="Try a different name or clear the filter to see your full list."
+          />
+        )
       ) : (
         <motion.ul
           initial="initial"

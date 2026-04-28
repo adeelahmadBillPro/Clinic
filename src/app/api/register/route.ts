@@ -124,9 +124,13 @@ export async function POST(req: Request) {
           phone: phone || null,
           password: hashed,
           role: "OWNER",
-          // isActive stays false until email verification — auth.ts
-          // rejects the credentials attempt otherwise.
-          isActive: false,
+          // isActive stays TRUE — `emailVerifiedAt` is the gate. Reason:
+          // auth.ts checks `!emailVerifiedAt` first and surfaces the
+          // specific "verify your email" prompt; falling back to the
+          // isActive check would just say "Invalid email or password",
+          // which freshly registered users find confusing. isActive=false
+          // is reserved for admin-deactivated accounts.
+          isActive: true,
           emailVerifyTokenHash: verifyTokenHash,
           acceptedTermsAt: acceptTerms ? new Date() : null,
         },
@@ -211,6 +215,12 @@ export async function POST(req: Request) {
     await sendEmail({ to: email, ...tmpl });
   });
 
+  // Dev convenience: when Resend isn't configured, ship the verification
+  // URL back in the response so the UI can show a clickable link right
+  // away. In production (RESEND_API_KEY set) this stays undefined — the
+  // link must NEVER leak over the wire to random callers, email only.
+  const devVerifyUrl = process.env.RESEND_API_KEY ? undefined : verifyUrl;
+
   return NextResponse.json({
     success: true,
     data: {
@@ -219,6 +229,7 @@ export async function POST(req: Request) {
       clinicSlug: clinic!.slug,
       trialEndsAt: trialEndsAt.toISOString(),
       needsVerification: true,
+      devVerifyUrl,
     },
   });
 }

@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
-import { UserPlus, Search, X, Loader2 } from "lucide-react";
+import { UserPlus, Search, X, Loader2, Users } from "lucide-react";
+import { EmptyState } from "@/components/shared/EmptyState";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 import { RegisterPatientForm } from "./RegisterPatientForm";
 
 type Row = {
@@ -27,6 +29,36 @@ type Row = {
   bloodGroup: string | null;
   allergies: string[];
   createdAt: string;
+  todayStatus: string | null;
+  todayToken: string | null;
+};
+
+type StatusFilter = "ALL" | "WAITING" | "CALLED" | "IN_PROGRESS" | "COMPLETED";
+
+const STATUS_CHIP: Record<
+  string,
+  { label: string; tone: string; dot: string }
+> = {
+  WAITING: {
+    label: "Waiting",
+    tone: "bg-amber-500/15 text-amber-700 border-amber-500/30",
+    dot: "bg-amber-500",
+  },
+  CALLED: {
+    label: "Called",
+    tone: "bg-sky-500/15 text-sky-700 border-sky-500/30",
+    dot: "bg-sky-500",
+  },
+  IN_PROGRESS: {
+    label: "In progress",
+    tone: "bg-emerald-500/15 text-emerald-700 border-emerald-500/30",
+    dot: "bg-emerald-500 animate-pulse",
+  },
+  COMPLETED: {
+    label: "Completed",
+    tone: "bg-emerald-500/10 text-emerald-700 border-emerald-500/30",
+    dot: "bg-emerald-600",
+  },
 };
 
 function ageFromDob(dob: string | null) {
@@ -42,6 +74,24 @@ export function PatientsClient({ initial }: { initial: Row[] }) {
   const [rows, setRows] = useState<Row[]>(initial);
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
+
+  // Counts driven off the unfiltered `rows` so chip totals don't change
+  // when the filter is applied.
+  const counts = useMemo(() => {
+    const c = { ALL: rows.length, WAITING: 0, CALLED: 0, IN_PROGRESS: 0, COMPLETED: 0 };
+    for (const r of rows) {
+      if (r.todayStatus && r.todayStatus in c) {
+        c[r.todayStatus as keyof typeof c]++;
+      }
+    }
+    return c;
+  }, [rows]);
+
+  const visible = useMemo(() => {
+    if (statusFilter === "ALL") return rows;
+    return rows.filter((r) => r.todayStatus === statusFilter);
+  }, [rows, statusFilter]);
 
   useEffect(() => {
     if (!q.trim()) {
@@ -129,11 +179,73 @@ export function PatientsClient({ initial }: { initial: Row[] }) {
         </Dialog>
       </div>
 
-      {rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-          No patients match &ldquo;{q}&rdquo;. Try a different search or
-          register a new patient.
-        </div>
+      {/* Today's status filter chips. Counts come from the current
+          `rows` list (search results or recent), so they stay relevant
+          when the user types a query. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          Today
+        </span>
+        <FilterChip
+          label="All"
+          count={counts.ALL}
+          active={statusFilter === "ALL"}
+          onClick={() => setStatusFilter("ALL")}
+        />
+        <FilterChip
+          label="Waiting"
+          count={counts.WAITING}
+          active={statusFilter === "WAITING"}
+          tone="amber"
+          onClick={() => setStatusFilter("WAITING")}
+        />
+        <FilterChip
+          label="Called"
+          count={counts.CALLED}
+          active={statusFilter === "CALLED"}
+          tone="sky"
+          onClick={() => setStatusFilter("CALLED")}
+        />
+        <FilterChip
+          label="In progress"
+          count={counts.IN_PROGRESS}
+          active={statusFilter === "IN_PROGRESS"}
+          tone="emerald"
+          onClick={() => setStatusFilter("IN_PROGRESS")}
+        />
+        <FilterChip
+          label="Completed"
+          count={counts.COMPLETED}
+          active={statusFilter === "COMPLETED"}
+          tone="emerald"
+          onClick={() => setStatusFilter("COMPLETED")}
+        />
+      </div>
+
+      {visible.length === 0 ? (
+        statusFilter !== "ALL" ? (
+          <EmptyState
+            icon={Search}
+            title={`No "${STATUS_CHIP[statusFilter]?.label ?? statusFilter}" patients today`}
+            description="Try a different filter or clear the filter to see all patients."
+            actionLabel="Show all"
+            onAction={() => setStatusFilter("ALL")}
+          />
+        ) : q.trim() ? (
+          <EmptyState
+            icon={Search}
+            title={`No matches for "${q}"`}
+            description="Try a different name, phone number, or MRN."
+          />
+        ) : (
+          <EmptyState
+            icon={Users}
+            title="No patients yet"
+            description="Register your first patient to start issuing tokens, taking consultations, and generating bills."
+            actionLabel="Register first patient"
+            onAction={() => setOpen(true)}
+          />
+        )
       ) : (
         <motion.ul
           initial="initial"
@@ -143,8 +255,9 @@ export function PatientsClient({ initial }: { initial: Row[] }) {
           }}
           className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
         >
-          {rows.map((p) => {
+          {visible.map((p) => {
             const age = ageFromDob(p.dob);
+            const chip = p.todayStatus ? STATUS_CHIP[p.todayStatus] : null;
             return (
               <motion.li
                 key={p.id}
@@ -184,6 +297,24 @@ export function PatientsClient({ initial }: { initial: Row[] }) {
                     <span>{p.gender === "M" ? "Male" : p.gender === "F" ? "Female" : "Other"}</span>
                     {age !== null && <span>· {age} yrs</span>}
                   </div>
+                  {chip && (
+                    <div className="mt-2.5 flex items-center justify-between gap-2 border-t pt-2">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+                          chip.tone,
+                        )}
+                      >
+                        <span className={cn("h-1.5 w-1.5 rounded-full", chip.dot)} />
+                        {chip.label}
+                      </span>
+                      {p.todayToken && (
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          {p.todayToken}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </Link>
               </motion.li>
             );
@@ -191,5 +322,49 @@ export function PatientsClient({ initial }: { initial: Row[] }) {
         </motion.ul>
       )}
     </div>
+  );
+}
+
+function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+  tone,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  tone?: "amber" | "sky" | "emerald";
+}) {
+  const activeTones: Record<string, string> = {
+    amber: "border-amber-500/40 bg-amber-500/15 text-amber-800",
+    sky: "border-sky-500/40 bg-sky-500/15 text-sky-800",
+    emerald: "border-emerald-500/40 bg-emerald-500/15 text-emerald-800",
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition",
+        active
+          ? tone
+            ? activeTones[tone]
+            : "border-primary/40 bg-primary/15 text-primary"
+          : "border-border bg-background text-muted-foreground hover:border-primary/30 hover:text-foreground",
+      )}
+    >
+      {label}
+      <span
+        className={cn(
+          "rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums",
+          active ? "bg-background/60" : "bg-muted",
+        )}
+      >
+        {count}
+      </span>
+    </button>
   );
 }

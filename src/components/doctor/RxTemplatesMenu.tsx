@@ -133,8 +133,9 @@ export function RxTemplatesMenu(_props: {
     const res = await fetch(`/api/prescriptions/templates/${id}`, {
       method: "DELETE",
     });
-    if (!res.ok) {
-      toast.error("Couldn't delete template");
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok || !body?.success) {
+      toast.error(body?.error ?? "Couldn't delete template");
       return;
     }
     setTemplates((list) => list.filter((t) => t.id !== id));

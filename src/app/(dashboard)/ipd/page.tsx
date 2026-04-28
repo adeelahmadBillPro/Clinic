@@ -1,6 +1,9 @@
 import { requireRole } from "@/lib/require-role";
 import { db } from "@/lib/tenant-db";
+import { isAdmin } from "@/lib/permissions";
 import { IpdOverview } from "@/components/ipd/IpdOverview";
+import { MyDayCard } from "@/components/shared/MyDayCard";
+import { RoleHeader } from "@/components/shared/RoleHeader";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "IPD — ClinicOS" };
@@ -42,15 +45,15 @@ export default async function IpdPage() {
   }));
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">IPD</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Bed grid, admissions, and discharge — consolidated billing on the way
-          out.
-        </p>
-      </div>
-      <IpdOverview beds={initialBeds} />
+    <div className="space-y-5">
+      <RoleHeader
+        title="IPD"
+        subtitle="Manage admissions, beds, nursing notes and discharges."
+        userName={session.user.name ?? "there"}
+        role={session.user.role}
+      />
+      <MyDayCard />
+      <IpdOverview beds={initialBeds} canManageBeds={isAdmin(session.user.role)} />
     </div>
   );
 }

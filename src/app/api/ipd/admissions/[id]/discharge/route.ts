@@ -68,24 +68,11 @@ export async function POST(
   );
   const bedCharge = days * Number(bed.dailyRate);
 
-  // Pull linked pharmacy orders + lab orders + consultations from same admission window
-  const pharmacyOrders = await t.pharmacyOrder.findMany({
-    where: {
-      patientId: admission.patientId,
-      createdAt: { gte: admission.admissionDate },
-      status: { in: ["DISPENSED", "PARTIAL"] },
-    },
-  });
-  const labOrders = await t.labOrder.findMany({
-    where: { admissionId: admission.id },
-  });
-
-  const pharmacySum = pharmacyOrders.reduce(
-    (s, o) => s + Number(o.totalAmount),
-    0,
-  );
-  const labSum = labOrders.reduce((s, o) => s + Number(o.totalAmount), 0);
-
+  // IPD discharge bills *only* bed charges. Pharmacy dispense already
+  // creates its own PHARMACY bill at dispense time, and lab orders
+  // create LAB bills at order time — rolling them in here would
+  // double-bill the patient. Reception sees all of them on the
+  // patient's bill list and can collect payment.
   const lineItems = [
     {
       description: `Bed charges · ${bed.wardName} ${bed.bedNumber} (${days} ${days === 1 ? "day" : "days"})`,
@@ -93,26 +80,6 @@ export async function POST(
       unitPrice: Number(bed.dailyRate),
       amount: bedCharge,
     },
-    ...(pharmacySum > 0
-      ? [
-          {
-            description: `Pharmacy charges (${pharmacyOrders.length} orders)`,
-            qty: 1,
-            unitPrice: pharmacySum,
-            amount: pharmacySum,
-          },
-        ]
-      : []),
-    ...(labSum > 0
-      ? [
-          {
-            description: `Lab charges (${labOrders.length} orders)`,
-            qty: 1,
-            unitPrice: labSum,
-            amount: labSum,
-          },
-        ]
-      : []),
   ];
 
   const total = lineItems.reduce((s, l) => s + l.amount, 0);
@@ -175,8 +142,6 @@ export async function POST(
         total,
         days,
         bedCharge,
-        pharmacySum,
-        labSum,
       },
     });
   } catch (err) {

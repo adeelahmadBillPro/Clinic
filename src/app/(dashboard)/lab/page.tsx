@@ -1,5 +1,7 @@
 import { requireRole } from "@/lib/require-role";
 import { LabQueue } from "@/components/lab/LabQueue";
+import { MyDayCard } from "@/components/shared/MyDayCard";
+import { RoleHeader } from "@/components/shared/RoleHeader";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Lab — ClinicOS" };
@@ -10,16 +12,15 @@ export default async function LabPage() {
     ["OWNER", "ADMIN", "LAB_TECH", "DOCTOR"],
     "/lab",
   );
-  void session;
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Lab</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Order tests, collect samples, enter results, and share abnormal-flagged
-          reports.
-        </p>
-      </div>
+    <div className="space-y-5">
+      <RoleHeader
+        title="Lab"
+        subtitle="Track sample collection, results and reports."
+        userName={session.user.name ?? "there"}
+        role={session.user.role}
+      />
+      <MyDayCard />
       <LabQueue />
     </div>
   );

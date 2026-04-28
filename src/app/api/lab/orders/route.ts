@@ -5,6 +5,7 @@ import { z } from "zod";
 import { findLabTest, LAB_CATALOG } from "@/lib/labCatalog";
 import { requireApiRole } from "@/lib/api-guards";
 import { nextSequence, pad } from "@/lib/counter";
+import { prisma } from "@/lib/prisma";
 
 const schema = z.object({
   patientId: z.string().min(1),
@@ -156,28 +157,75 @@ export async function POST(req: Request) {
     );
   }
 
-  const order = await t.labOrder.create({
-    data: {
-      clinicId,
-      orderNumber,
-      patientId: parsed.data.patientId,
-      doctorId,
-      consultationId: parsed.data.consultationId ?? null,
-      admissionId: parsed.data.admissionId ?? null,
-      tests: tests.map((t) => ({
-        code: t.code,
-        name: t.name,
-        price: t.price,
-        sampleType: t.sampleType,
-        parameters: t.parameters,
-      })),
-      totalAmount: total,
-      status: "ORDERED",
-    },
+  // Create order + LAB bill atomically — mirrors the token + consultation
+  // bill pattern. Bill starts PENDING; reception / lab counter collects
+  // payment when the patient pays. Without this, lab orders never appear
+  // in `outstanding` and the patient could leave without paying.
+  const result = await prisma.$transaction(async (tx) => {
+    const order = await tx.labOrder.create({
+      data: {
+        clinicId,
+        orderNumber,
+        patientId: parsed.data.patientId,
+        doctorId,
+        consultationId: parsed.data.consultationId ?? null,
+        admissionId: parsed.data.admissionId ?? null,
+        tests: tests.map((t) => ({
+          code: t.code,
+          name: t.name,
+          price: t.price,
+          sampleType: t.sampleType,
+          parameters: t.parameters,
+        })),
+        totalAmount: total,
+        status: "ORDERED",
+      },
+    });
+
+    let billId: string | null = null;
+    let billNumber: string | null = null;
+    if (total > 0) {
+      const billYear = new Date().getFullYear();
+      const billSeq = await nextSequence(clinicId, "BILL", tx, billYear);
+      billNumber = `BL-${billYear}-${pad(billSeq, 4)}`;
+      const bill = await tx.bill.create({
+        data: {
+          clinicId,
+          billNumber,
+          patientId: parsed.data.patientId,
+          // Doctor attribution — see P3-33.
+          doctorId,
+          billType: "LAB",
+          items: tests.map((t) => ({
+            description: t.name,
+            qty: 1,
+            unitPrice: t.price,
+            amount: t.price,
+          })),
+          subtotal: total,
+          discount: 0,
+          totalAmount: total,
+          paidAmount: 0,
+          balance: total,
+          paymentMethod: "CASH",
+          status: "PENDING",
+          collectedBy: session.user.id,
+        },
+      });
+      billId = bill.id;
+    }
+
+    return { order, billId, billNumber };
   });
 
   return NextResponse.json({
     success: true,
-    data: { id: order.id, orderNumber: order.orderNumber, total },
+    data: {
+      id: result.order.id,
+      orderNumber: result.order.orderNumber,
+      total,
+      billId: result.billId,
+      billNumber: result.billNumber,
+    },
   });
 }
