@@ -65,8 +65,15 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  // Admitting a patient — ward staff (nurse/doctor) + admins.
-  const gate = await requireApiRole(["OWNER", "ADMIN", "DOCTOR", "NURSE"]);
+  // Admitting a patient — ward staff (nurse/doctor), reception (intake
+  // paperwork), and admins.
+  const gate = await requireApiRole([
+    "OWNER",
+    "ADMIN",
+    "DOCTOR",
+    "NURSE",
+    "RECEPTIONIST",
+  ]);
   if (gate instanceof NextResponse) return gate;
   const session = gate;
   if (!session?.user?.clinicId) {

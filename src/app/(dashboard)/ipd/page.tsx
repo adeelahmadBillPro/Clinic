@@ -9,9 +9,10 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "IPD — ClinicOS" };
 
 export default async function IpdPage() {
-  // P3-44: role gate
+  // P3-44: role gate. Reception included so they can run admission
+  // paperwork (bed assignment, intake notes) — common in real clinics.
   const session = await requireRole(
-    ["OWNER", "ADMIN", "NURSE", "DOCTOR"],
+    ["OWNER", "ADMIN", "NURSE", "DOCTOR", "RECEPTIONIST"],
     "/ipd",
   );
 

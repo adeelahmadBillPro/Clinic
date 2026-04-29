@@ -252,6 +252,38 @@ export function IpdOverview({
         />
       ) : (
         <div className="space-y-6">
+          {/* Step-by-step guide so a new user understands that clicking a
+              bed IS the admission action. Without this banner the page
+              looks like a static bed map — staff don't realise it's
+              clickable. */}
+          <div className="rounded-lg border border-dashed border-primary/25 bg-primary/5 px-3 py-2.5 text-[12px] leading-relaxed text-muted-foreground">
+            <span className="font-semibold text-primary">
+              How to admit a patient:
+            </span>{" "}
+            <span className="font-medium text-foreground">
+              1. Click any green bed
+            </span>{" "}
+            →{" "}
+            <span className="font-medium text-foreground">
+              2. Search & pick the patient
+            </span>{" "}
+            →{" "}
+            <span className="font-medium text-foreground">
+              3. Pick admitting doctor + diagnosis
+            </span>{" "}
+            →{" "}
+            <span className="font-medium text-foreground">4. Admit</span>.
+            Red beds are occupied — click to view chart or discharge.
+            Patient must be registered first (use{" "}
+            <a
+              href="/patients?add=1"
+              className="font-medium text-primary hover:underline"
+            >
+              Patients
+            </a>
+            ).
+          </div>
+
           {wards.map(([ward, wardBeds]) => (
             <section key={ward}>
               <div className="mb-2 flex items-center justify-between">

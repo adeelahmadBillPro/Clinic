@@ -10,7 +10,7 @@ export const metadata = { title: "Cash shifts — ClinicOS" };
 export default async function CashShiftsPage() {
   // P3-44: role gate
   const session = await requireRole(
-    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST"],
+    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST", "LAB_TECH"],
     "/billing/shift",
   );
 

@@ -81,7 +81,10 @@ export const NAV: NavGroup[] = [
         label: "IPD",
         href: "/ipd",
         icon: "BedDouble",
-        roles: ["OWNER", "ADMIN", "NURSE", "DOCTOR"],
+        // Reception handles admission paperwork (bed assignment, patient
+        // intake) in most clinics, so they need the link too. Nurse and
+        // doctor manage bedside care + discharge.
+        roles: ["OWNER", "ADMIN", "NURSE", "DOCTOR", "RECEPTIONIST"],
         module: "ipd",
       },
     ],
@@ -93,7 +96,18 @@ export const NAV: NavGroup[] = [
         label: "Patients",
         href: "/patients",
         icon: "Users",
-        roles: ["OWNER", "ADMIN", "DOCTOR", "RECEPTIONIST", "NURSE"],
+        // Everyone clinical-facing needs the patient directory:
+        // pharmacy looks them up before OTC sale, lab attaches results,
+        // nursing reads chart, doctor + reception register and edit.
+        roles: [
+          "OWNER",
+          "ADMIN",
+          "DOCTOR",
+          "RECEPTIONIST",
+          "NURSE",
+          "PHARMACIST",
+          "LAB_TECH",
+        ],
       },
       {
         label: "Appointments",
@@ -105,7 +119,15 @@ export const NAV: NavGroup[] = [
         label: "Billing",
         href: "/billing",
         icon: "Receipt",
-        roles: ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST"],
+        // Lab tech needs to view + collect lab fees too. Everyone who
+        // touches money sees this.
+        roles: [
+          "OWNER",
+          "ADMIN",
+          "RECEPTIONIST",
+          "PHARMACIST",
+          "LAB_TECH",
+        ],
       },
     ],
   },
@@ -210,8 +232,8 @@ export function bottomBarForRole(role: Role): NavItem[] {
     DOCTOR: ["/doctor", "/patients", "/appointments", "/lab"],
     RECEPTIONIST: ["/reception", "/appointments", "/patients", "/billing"],
     NURSE: ["/ipd", "/patients", "/appointments", "/lab"],
-    PHARMACIST: ["/pharmacy", "/inventory", "/billing", "/patients"],
-    LAB_TECH: ["/lab", "/patients", "/appointments", "/billing"],
+    PHARMACIST: ["/pharmacy", "/inventory", "/patients", "/billing"],
+    LAB_TECH: ["/lab", "/patients", "/billing", "/appointments"],
   };
   const wanted = perRole[role];
   const all = NAV.flatMap((g) => g.items);

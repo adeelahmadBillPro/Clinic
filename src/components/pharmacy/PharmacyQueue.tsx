@@ -3,7 +3,7 @@
 import { useMemo, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Loader2, RefreshCcw, Search, X, Pill } from "lucide-react";
+import { Loader2, RefreshCcw, Search, X, Pill, ShoppingBag } from "lucide-react";
 import { toast } from "sonner";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { usePolling } from "@/lib/hooks/usePolling";
 import { DispenseDialog } from "./DispenseDialog";
+import { OtcSaleDialog } from "./OtcSaleDialog";
 
 export type PharmacyOrder = {
   id: string;
@@ -68,6 +69,7 @@ export function PharmacyQueue() {
   );
   const [active, setActive] = useState<PharmacyOrder | null>(null);
   const [query, setQuery] = useState("");
+  const [otcOpen, setOtcOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -110,20 +112,31 @@ export function PharmacyQueue() {
   return (
     <>
       <div className="overflow-hidden rounded-xl border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <div className="text-sm font-semibold">Prescriptions</div>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={load}
-            aria-label="Refresh"
-          >
-            {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCcw className="h-4 w-4" />
-            )}
-          </Button>
+          <div className="flex items-center gap-1.5">
+            <Button
+              size="sm"
+              onClick={() => setOtcOpen(true)}
+              className="h-8"
+              title="Sell directly to a walk-in customer (no doctor prescription)"
+            >
+              <ShoppingBag className="mr-1.5 h-3.5 w-3.5" />
+              New OTC sale
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              onClick={load}
+              aria-label="Refresh"
+            >
+              {loading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
 
         <div className="relative mb-3">
@@ -246,6 +259,17 @@ export function PharmacyQueue() {
           onClose={() => setActive(null)}
           onDone={(billId?: string) => {
             setActive(null);
+            load();
+            if (billId) router.push(`/billing/${billId}`);
+          }}
+        />
+      )}
+
+      {otcOpen && (
+        <OtcSaleDialog
+          onClose={() => setOtcOpen(false)}
+          onDone={(billId?: string) => {
+            setOtcOpen(false);
             load();
             if (billId) router.push(`/billing/${billId}`);
           }}

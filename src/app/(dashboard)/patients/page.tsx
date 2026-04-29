@@ -8,7 +8,15 @@ export const metadata = { title: "Patients — ClinicOS" };
 export default async function PatientsPage() {
   // P3-44: role gate
   const session = await requireRole(
-    ["OWNER", "ADMIN", "DOCTOR", "RECEPTIONIST", "NURSE"],
+    [
+      "OWNER",
+      "ADMIN",
+      "DOCTOR",
+      "RECEPTIONIST",
+      "NURSE",
+      "PHARMACIST",
+      "LAB_TECH",
+    ],
     "/patients",
   );
 

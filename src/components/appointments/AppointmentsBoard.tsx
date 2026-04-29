@@ -105,9 +105,13 @@ type StatusFilter =
 export function AppointmentsBoard({
   initial,
   doctors,
+  currentDoctorId,
 }: {
   initial: Appt[];
   doctors: Doctor[];
+  /** When the logged-in user has a Doctor profile, default the filter +
+   *  new-appointment doctor dropdown to that doctor instead of all/first. */
+  currentDoctorId?: string | null;
 }) {
   const router = useRouter();
   const handleEnterTab = useEnterTabsForward();
@@ -122,7 +126,7 @@ export function AppointmentsBoard({
   const [form, setForm] = useState({
     patientName: "",
     patientPhone: "",
-    doctorId: doctors[0]?.id ?? "",
+    doctorId: currentDoctorId ?? doctors[0]?.id ?? "",
     appointmentDate: "",
     timeSlot: "",
     type: "FIRST_VISIT" as "FIRST_VISIT" | "FOLLOW_UP" | "CHECKUP",
@@ -140,7 +144,9 @@ export function AppointmentsBoard({
   // search/sort/include-past without a full page navigation.
   const [appts, setAppts] = useState<Appt[]>(initial);
   const [q, setQ] = useState("");
-  const [doctorFilter, setDoctorFilter] = useState<string>("ALL");
+  const [doctorFilter, setDoctorFilter] = useState<string>(
+    currentDoctorId ?? "ALL",
+  );
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
   const [includePast, setIncludePast] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -547,9 +553,30 @@ export function AppointmentsBoard({
                   {slotsReason ?? "Doctor is closed on this day."}
                 </div>
               ) : slots.length === 0 ? (
-                <div className="mt-1 rounded-md border border-dashed bg-muted/30 p-3 text-center text-xs text-muted-foreground">
-                  Doctor has no schedule set. Ask them to configure availability
-                  in <a href="/profile" className="text-primary hover:underline">My profile</a>.
+                // Fallback: doctor hasn't set a weekly schedule, but
+                // reception still needs to book a phone appointment.
+                // Allow manual HH:MM entry — same conflict check still
+                // runs server-side via the unique slot index.
+                <div className="mt-1 space-y-2">
+                  <div className="rounded-md border border-dashed border-amber-500/40 bg-amber-500/5 p-2.5 text-[11px] text-amber-800">
+                    Doctor hasn&rsquo;t set a weekly schedule yet. You can still
+                    book any time manually below — system will still block
+                    double-booking the same slot.{" "}
+                    <a
+                      href="/profile"
+                      className="font-medium text-primary hover:underline"
+                    >
+                      Set schedule →
+                    </a>
+                  </div>
+                  <Input
+                    type="time"
+                    value={form.timeSlot}
+                    onChange={(e) =>
+                      setForm({ ...form, timeSlot: e.target.value })
+                    }
+                    className="h-9 max-w-[160px]"
+                  />
                 </div>
               ) : (
                 <div className="mt-1 flex flex-wrap gap-1.5">

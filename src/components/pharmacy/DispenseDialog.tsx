@@ -144,7 +144,21 @@ export function DispenseDialog({
         toast.error(body?.error ?? "Dispense failed");
         return;
       }
-      toast.success(`Dispensed · ${body.data.billNumber}`);
+      const notDispensed: Array<{ name: string; shortBy: number }> =
+        body.data.notDispensed ?? [];
+      if (notDispensed.length > 0) {
+        // Partial — tell the pharmacist what wasn't given so they can
+        // hand-mark the printed Rx slip for the patient to buy elsewhere.
+        const lines = notDispensed
+          .map((n) => `${n.name} (short by ${n.shortBy})`)
+          .join(", ");
+        toast.warning(
+          `Partial · ${body.data.billNumber}. Not dispensed: ${lines}`,
+          { duration: 10000 },
+        );
+      } else {
+        toast.success(`Dispensed · ${body.data.billNumber}`);
+      }
       onDone(body.data.billId);
     } catch {
       toast.error("Network error");

@@ -7,7 +7,7 @@ export const metadata = { title: "New bill — ClinicOS" };
 export default async function NewBillPage() {
   // P3-44: role gate
   const session = await requireRole(
-    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST"],
+    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST", "LAB_TECH"],
     "/billing/new",
   );
   void session;

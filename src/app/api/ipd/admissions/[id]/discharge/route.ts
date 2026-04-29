@@ -16,7 +16,15 @@ export async function POST(
 ) {
   const { id } = await params;
   // Discharging creates a bill + frees a bed — doctor/nurse + admins.
-  const gate = await requireApiRole(["OWNER", "ADMIN", "DOCTOR", "NURSE"]);
+  // Discharge can be triggered by reception (paperwork) too — same as
+  // admission. Nurse/doctor for ward-side decisions, admin for override.
+  const gate = await requireApiRole([
+    "OWNER",
+    "ADMIN",
+    "DOCTOR",
+    "NURSE",
+    "RECEPTIONIST",
+  ]);
   if (gate instanceof NextResponse) return gate;
   const session = gate;
   if (!session?.user?.clinicId) {

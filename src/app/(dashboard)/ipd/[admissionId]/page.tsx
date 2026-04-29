@@ -18,7 +18,7 @@ export default async function AdmissionDetailPage({
   const { admissionId } = await params;
   // P3-44: role gate
   const session = await requireRole(
-    ["OWNER", "ADMIN", "NURSE", "DOCTOR"],
+    ["OWNER", "ADMIN", "NURSE", "DOCTOR", "RECEPTIONIST"],
     "/ipd/[admissionId]",
   );
   void session;

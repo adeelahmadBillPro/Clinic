@@ -52,7 +52,15 @@ export default async function PatientEmrPage({
   const { patientId } = await params;
   // P3-44: role gate
   const session = await requireRole(
-    ["OWNER", "ADMIN", "DOCTOR", "RECEPTIONIST", "NURSE"],
+    [
+      "OWNER",
+      "ADMIN",
+      "DOCTOR",
+      "RECEPTIONIST",
+      "NURSE",
+      "PHARMACIST",
+      "LAB_TECH",
+    ],
     "/patients/[patientId]",
   );
 

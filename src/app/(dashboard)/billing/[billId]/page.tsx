@@ -19,7 +19,7 @@ export default async function BillDetailPage({
   const sp = await searchParams;
   // P3-44: role gate
   const session = await requireRole(
-    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST"],
+    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST", "LAB_TECH"],
     "/billing/[billId]",
   );
 
@@ -52,6 +52,10 @@ export default async function BillDetailPage({
       qty: number;
       unitPrice: number;
       amount: number;
+      // Pharmacy bills can carry a "not_dispensed" footer of items that
+      // were prescribed but unavailable at the in-house pharmacy. Default
+      // (older bills, OPD/IPD/LAB) is "dispensed".
+      kind?: "dispensed" | "not_dispensed";
     }>,
     subtotal: Number(bill.subtotal),
     discount: Number(bill.discount),

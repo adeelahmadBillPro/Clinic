@@ -12,7 +12,7 @@ export const metadata = { title: "Billing — ClinicOS" };
 export default async function BillingPage() {
   // P3-44: role gate
   const session = await requireRole(
-    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST"],
+    ["OWNER", "ADMIN", "RECEPTIONIST", "PHARMACIST", "LAB_TECH"],
     "/billing",
   );
 

@@ -10,6 +10,7 @@ export async function POST(req: Request) {
     "ADMIN",
     "RECEPTIONIST",
     "PHARMACIST",
+    "LAB_TECH",
   ]);
   if (gate instanceof NextResponse) return gate;
   const session = gate;

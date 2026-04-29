@@ -24,6 +24,9 @@ type BillItem = {
   qty: number;
   unitPrice: number;
   amount: number;
+  // Pharmacy bills can carry "not_dispensed" lines (qty=shortBy, amount=0)
+  // for items prescribed but unavailable at the in-house pharmacy.
+  kind?: "dispensed" | "not_dispensed";
 };
 
 type Bill = {
@@ -293,35 +296,82 @@ export function BillDetail({
           </div>
         </div>
 
-        {/* Items table */}
-        <div className="mt-6 overflow-hidden rounded-lg border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-muted/40 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                <th className="px-3 py-2 text-left">Description</th>
-                <th className="w-20 px-3 py-2 text-right">Qty</th>
-                <th className="w-28 px-3 py-2 text-right">Unit</th>
-                <th className="w-32 px-3 py-2 text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              {bill.items.map((i, idx) => (
-                <tr key={idx} className="border-t">
-                  <td className="px-3 py-2">{i.description}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    {i.qty}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums">
-                    ₨ {Math.round(i.unitPrice).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right tabular-nums font-medium">
-                    ₨ {Math.round(i.amount).toLocaleString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        {/* Items tables — billed (dispensed) and, for pharmacy bills with
+            partial dispense, a separate "not dispensed" section so the
+            patient leaves with one piece of paper that's complete. Older
+            bills don't set `kind` — those default to dispensed. */}
+        {(() => {
+          const dispensedItems = bill.items.filter(
+            (i) => i.kind !== "not_dispensed",
+          );
+          const notDispensedItems = bill.items.filter(
+            (i) => i.kind === "not_dispensed",
+          );
+          return (
+            <>
+              <div className="mt-6 overflow-hidden rounded-lg border">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/40 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      <th className="px-3 py-2 text-left">Description</th>
+                      <th className="w-20 px-3 py-2 text-right">Qty</th>
+                      <th className="w-28 px-3 py-2 text-right">Unit</th>
+                      <th className="w-32 px-3 py-2 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dispensedItems.map((i, idx) => (
+                      <tr key={idx} className="border-t">
+                        <td className="px-3 py-2">{i.description}</td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {i.qty}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          ₨ {Math.round(i.unitPrice).toLocaleString()}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums font-medium">
+                          ₨ {Math.round(i.amount).toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {notDispensedItems.length > 0 && (
+                <div className="mt-4 overflow-hidden rounded-lg border border-amber-500/40 bg-amber-500/5">
+                  <div className="border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                    Not dispensed at this pharmacy — please buy from another
+                    pharmacy
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] font-medium uppercase tracking-wider text-amber-800/70">
+                        <th className="px-3 py-2 text-left">Medicine</th>
+                        <th className="w-32 px-3 py-2 text-right">Short by</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {notDispensedItems.map((i, idx) => (
+                        <tr
+                          key={idx}
+                          className="border-t border-amber-500/20"
+                        >
+                          <td className="px-3 py-2 text-amber-900">
+                            {i.description}
+                          </td>
+                          <td className="px-3 py-2 text-right tabular-nums text-amber-900">
+                            {i.qty}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* Totals */}
         <div className="mt-4 flex justify-end">

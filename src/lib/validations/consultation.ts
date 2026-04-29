@@ -56,5 +56,10 @@ export const saveConsultationSchema = z.object({
   followUpNotes: z.string().optional(),
   referredTo: z.string().optional(),
   complete: z.boolean().optional(),
+  // When true (default), creates a PharmacyOrder so the in-house
+  // pharmacy sees the prescription and can dispense + bill. When false,
+  // the prescription is only saved on the chart — patient takes the
+  // printed Rx and buys medicines elsewhere.
+  sendToPharmacy: z.boolean().optional().default(true),
 });
 export type SaveConsultationInput = z.infer<typeof saveConsultationSchema>;

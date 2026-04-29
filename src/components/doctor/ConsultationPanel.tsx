@@ -79,6 +79,10 @@ export function ConsultationPanel({
   const [medicines, setMedicines] = useState<MedicineItem[]>([]);
   const [prescriptionNotes, setPrescriptionNotes] = useState("");
   const [followUpDate, setFollowUpDate] = useState("");
+  // Default ON — auto-forwards Rx to in-house pharmacy. Doctor can flip
+  // OFF if patient prefers buying outside (no PharmacyOrder is created,
+  // patient just walks away with the printed slip).
+  const [sendToPharmacy, setSendToPharmacy] = useState(true);
 
   const [saving, setSaving] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -210,6 +214,7 @@ export function ConsultationPanel({
             prescriptionNotes,
             followUpDate: followUpDate || undefined,
             complete,
+            sendToPharmacy,
           }),
         });
         const body = await res.json().catch(() => ({}));
@@ -269,6 +274,7 @@ export function ConsultationPanel({
       followUpDate,
       outstanding,
       onDone,
+      sendToPharmacy,
     ],
   );
 
@@ -513,6 +519,30 @@ export function ConsultationPanel({
             click <strong>Add</strong>. Use a preset (Flu, Hypertension)
             for common combos. Set frequency / duration per medicine.
           </p>
+
+          {/* Forwarding control: explicit toggle so the doctor decides
+              whether the in-house pharmacy gets the order. Off = patient
+              takes the printed slip and buys outside; no PharmacyOrder
+              is created. */}
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border bg-card p-3">
+            <input
+              type="checkbox"
+              checked={sendToPharmacy}
+              onChange={(e) => setSendToPharmacy(e.target.checked)}
+              className="mt-0.5 h-4 w-4 cursor-pointer accent-primary"
+            />
+            <div className="text-sm">
+              <div className="font-medium">
+                Send to in-house pharmacy
+              </div>
+              <div className="mt-0.5 text-[11px] text-muted-foreground">
+                {sendToPharmacy
+                  ? "Pharmacy will see this Rx, dispense available stock, and bill the patient. Patient still gets a printed slip."
+                  : "Rx is saved on chart only — patient takes the printed slip and buys medicines elsewhere. No pharmacy order, no bill."}
+              </div>
+            </div>
+          </label>
+
           <PrescriptionBuilder
             value={medicines}
             onChange={setMedicines}

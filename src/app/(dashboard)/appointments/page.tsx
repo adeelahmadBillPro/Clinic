@@ -30,6 +30,12 @@ export default async function AppointmentsPage() {
     specialization: d.specialization,
   }));
 
+  // When a doctor opens this page directly, default the filter + new
+  // appointment dropdown to their own profile. Otherwise it shows "All
+  // doctors" and the doctor has to manually filter every time.
+  const myDoctor = doctors.find((d) => d.userId === session.user.id);
+  const currentDoctorId = myDoctor?.id ?? null;
+
   // Server-render the default view (today → +14d) so the page paints
   // instantly. The client component owns search/filter and refetches via
   // /api/appointments when the user changes anything.
@@ -77,6 +83,7 @@ export default async function AppointmentsPage() {
           createdAt: a.createdAt.toISOString(),
         }))}
         doctors={doctorList}
+        currentDoctorId={currentDoctorId}
       />
     </div>
   );

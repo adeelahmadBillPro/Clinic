@@ -157,6 +157,33 @@ export async function POST(
     const seq = await nextSequence(clinicId, "BILL", tx, year);
     const billNumber = `BL-${year}-${pad(seq, 4)}`;
 
+    // Bill items in two flavours:
+    //   `kind: "dispensed"`  → counted toward total, patient pays for these
+    //   `kind: "not_dispensed"` → amount=0, qty=shortBy. Carried for the
+    //     printed receipt so the patient sees what to buy elsewhere.
+    // BillDetail renders them in separate sections; total math is unchanged
+    // because amount=0 on not_dispensed.
+    const billItems = [
+      ...dispensedItems
+        .filter((i) => i.dispensedQty > 0)
+        .map((i) => ({
+          kind: "dispensed" as const,
+          description: i.name,
+          qty: i.dispensedQty,
+          unitPrice: i.unitPrice,
+          amount: i.unitPrice * i.dispensedQty,
+        })),
+      ...dispensedItems
+        .filter((i) => i.dispensedQty < i.qty)
+        .map((i) => ({
+          kind: "not_dispensed" as const,
+          description: i.name,
+          qty: i.qty - i.dispensedQty,
+          unitPrice: 0,
+          amount: 0,
+        })),
+    ];
+
     const bill = await tx.bill.create({
       data: {
         clinicId,
@@ -165,12 +192,7 @@ export async function POST(
         // Attribute to prescribing doctor when known — see P3-33.
         doctorId: prescribingDoctorId,
         billType: "PHARMACY",
-        items: dispensedItems.map((i) => ({
-          description: i.name,
-          qty: i.dispensedQty,
-          unitPrice: i.unitPrice,
-          amount: i.unitPrice * i.dispensedQty,
-        })),
+        items: billItems,
         subtotal: total,
         discount: 0,
         totalAmount: total,
@@ -203,7 +225,24 @@ export async function POST(
       },
     });
 
-    return { orderId: updatedOrder.id, billId: bill.id, billNumber };
+    // Items the pharmacist couldn't fulfil — patient buys these
+    // elsewhere using the printed Rx slip.
+    const notDispensed = dispensedItems
+      .filter((i) => i.dispensedQty < i.qty)
+      .map((i) => ({
+        name: i.name,
+        requestedQty: i.qty,
+        dispensedQty: i.dispensedQty,
+        shortBy: i.qty - i.dispensedQty,
+      }));
+
+    return {
+      orderId: updatedOrder.id,
+      billId: bill.id,
+      billNumber,
+      status,
+      notDispensed,
+    };
     });
     return NextResponse.json({ success: true, data: result });
   } catch (err) {

@@ -229,9 +229,13 @@ export async function POST(req: Request) {
       });
     }
 
-    // Prescription — only if medicines were added
+    // Prescription — only if medicines were added.
+    // `sendToPharmacy` (default true) decides whether we also seed a
+    // PharmacyOrder. When false, the Rx exists on the chart but pharmacy
+    // doesn't see it — patient takes the printed slip and buys outside.
     let prescriptionId: string | null = null;
     if (input.medicines && input.medicines.length > 0) {
+      const sendToPharmacy = input.sendToPharmacy ?? true;
       const prescription = await tx.prescription.create({
         data: {
           clinicId,
@@ -240,42 +244,44 @@ export async function POST(req: Request) {
           doctorId: token.doctorId,
           medicines: input.medicines,
           notes: input.prescriptionNotes ?? null,
-          status: "SENT_TO_PHARMACY",
-          sentAt: new Date(),
+          status: sendToPharmacy ? "SENT_TO_PHARMACY" : "PENDING",
+          sentAt: sendToPharmacy ? new Date() : null,
         },
       });
       prescriptionId = prescription.id;
 
-      // Also seed a pending pharmacy order so pharmacy sees it. Counter
-      // runs inside the same tx to keep sequence + write atomic.
-      const year = new Date().getFullYear();
-      const seq = await nextSequence(clinicId, "PH", tx, year);
-      const orderNumber = `PH-${year}-${pad(seq, 4)}`;
+      if (sendToPharmacy) {
+        // Atomic counter + pharmacy order create inside the same tx, so a
+        // rolled-back consultation save doesn't waste a sequence number.
+        const year = new Date().getFullYear();
+        const seq = await nextSequence(clinicId, "PH", tx, year);
+        const orderNumber = `PH-${year}-${pad(seq, 4)}`;
 
-      const items = input.medicines.map((m) => ({
-        medicineId: m.medicineId ?? null,
-        name: m.name,
-        qty: m.qty ?? 0,
-        unitPrice: 0,
-        subtotal: 0,
-        dispensedQty: 0,
-        instructions: m.instructions ?? "",
-        dose: m.dose ?? "",
-        frequency: m.frequency ?? "",
-        duration: m.duration ?? "",
-      }));
+        const items = input.medicines.map((m) => ({
+          medicineId: m.medicineId ?? null,
+          name: m.name,
+          qty: m.qty ?? 0,
+          unitPrice: 0,
+          subtotal: 0,
+          dispensedQty: 0,
+          instructions: m.instructions ?? "",
+          dose: m.dose ?? "",
+          frequency: m.frequency ?? "",
+          duration: m.duration ?? "",
+        }));
 
-      await tx.pharmacyOrder.create({
-        data: {
-          clinicId,
-          orderNumber,
-          prescriptionId: prescription.id,
-          patientId: token.patientId,
-          items,
-          totalAmount: 0,
-          status: "PENDING",
-        },
-      });
+        await tx.pharmacyOrder.create({
+          data: {
+            clinicId,
+            orderNumber,
+            prescriptionId: prescription.id,
+            patientId: token.patientId,
+            items,
+            totalAmount: 0,
+            status: "PENDING",
+          },
+        });
+      }
     }
 
     // Complete the token if requested
