@@ -114,6 +114,10 @@ async function main() {
         isActive: true,
         failedLoginAttempts: 0,
         lockedUntil: null,
+        // Auto-verify — auth.ts rejects logins where emailVerifiedAt is
+        // null. We trust the operator running this script to have
+        // already verified the address out-of-band.
+        emailVerifiedAt: existing.emailVerifiedAt ?? new Date(),
         ...(password ? { password: await hashPassword(password) } : {}),
       },
     });
@@ -134,6 +138,9 @@ async function main() {
         role: "SUPER_ADMIN",
         password: await hashPassword(password),
         clinicId: null,
+        // Skip the email-verify dance for super admins — they're seeded
+        // by the operator, not signing up via the public form.
+        emailVerifiedAt: new Date(),
       },
     });
     console.log(`[✓] Created new SUPER_ADMIN user ${email}.`);
