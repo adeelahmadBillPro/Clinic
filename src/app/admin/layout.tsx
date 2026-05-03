@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { ShieldCheck, LayoutDashboard, Building2, Inbox, LogOut } from "lucide-react";
 import { Suspense } from "react";
 import { AccessDeniedToast } from "@/components/shared/AccessDeniedToast";
+import { AdminMobileMenu } from "@/components/admin/AdminMobileMenu";
 
 export const metadata = { title: "Super Admin — ClinicOS" };
 
@@ -88,6 +89,18 @@ export default async function AdminLayout({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur-md sm:px-6 lg:hidden">
+          {/* Mobile: hamburger drawer with full nav + sign out. The
+              desktop sidebar (above) is hidden on small screens so without
+              this menu the user is stranded with no way to navigate or
+              log out. */}
+          <AdminMobileMenu
+            email={session.user.email ?? ""}
+            pendingCount={pendingCount}
+            signOut={async () => {
+              "use server";
+              await signOut({ redirectTo: "/login" });
+            }}
+          />
           <Logo />
           <span className="text-sm font-semibold">Super Admin</span>
           <div className="ml-auto flex items-center gap-1">
