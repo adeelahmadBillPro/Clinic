@@ -8,6 +8,7 @@ import { TrialBanner } from "@/components/shared/TrialBanner";
 import { SidebarUser } from "@/components/shared/SidebarUser";
 import { AccessDeniedToast } from "@/components/shared/AccessDeniedToast";
 import { ScrollToTopDashboard } from "@/components/shared/ScrollToTopDashboard";
+import { InstallAppPrompt } from "@/components/shared/InstallAppPrompt";
 import { Suspense } from "react";
 import { cn } from "@/lib/utils";
 
@@ -73,6 +74,7 @@ export default async function DashboardLayout({
 
       <MobileBottomNav role={session.user.role} />
       <ScrollToTopDashboard />
+      <InstallAppPrompt />
     </div>
   );
 }

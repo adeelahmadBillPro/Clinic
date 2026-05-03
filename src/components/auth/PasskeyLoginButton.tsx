@@ -15,7 +15,10 @@ import { toast } from "sonner";
 export function PasskeyLoginButton() {
   const router = useRouter();
   const params = useSearchParams();
-  const [supported, setSupported] = useState(false);
+  // `null` = haven't checked yet (server-render + first paint).
+  // We always render the divider to prevent layout shift when hydration
+  // finishes; the button itself only appears once we know the API works.
+  const [supported, setSupported] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -25,6 +28,11 @@ export function PasskeyLoginButton() {
     );
   }, []);
 
+  // Hide entirely while we don't know yet (avoids flash of broken-looking
+  // disabled state during the ~50ms before hydration sets supported).
+  if (supported === null) return null;
+  // Browser without WebAuthn (rare in 2026 but happens in some embedded
+  // webviews) — silently show no shortcut.
   if (!supported) return null;
 
   async function handle() {

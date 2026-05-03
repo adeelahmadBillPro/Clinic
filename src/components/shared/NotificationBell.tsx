@@ -145,7 +145,9 @@ export function NotificationBell() {
         <button
           type="button"
           aria-label="Notifications"
-          className="relative inline-flex h-8 w-8 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
+          // 40x40 hit area on touch screens (closer to Apple HIG 44px)
+          // collapses to 32x32 on desktop to match the rest of the toolbar.
+          className="relative inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-md text-muted-foreground outline-none transition hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 sm:h-8 sm:w-8"
         >
           <motion.span
             animate={
@@ -194,8 +196,14 @@ export function NotificationBell() {
           </AnimatePresence>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0">
-        <div className="flex items-center justify-between border-b px-3.5 py-2.5">
+      <DropdownMenuContent
+        align="end"
+        sideOffset={8}
+        // Mobile: nearly full viewport width with a small margin so it
+        // doesn't kiss the edges. Desktop: fixed 320px popover.
+        className="w-[calc(100vw-1rem)] max-w-sm p-0 sm:w-80"
+      >
+        <div className="flex items-center justify-between border-b px-3.5 py-3 sm:py-2.5">
           <div>
             <div className="text-sm font-semibold">Notifications</div>
             <div className="text-[10px] text-muted-foreground">
@@ -205,14 +213,17 @@ export function NotificationBell() {
           {unread > 0 && (
             <button
               onClick={markAllRead}
-              className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline"
+              // Bigger tap target on touch devices.
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1.5 text-[11px] font-medium text-primary transition hover:bg-primary/5 sm:px-1 sm:py-0.5"
             >
-              <CheckCheck className="h-3 w-3" />
+              <CheckCheck className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
               Mark all read
             </button>
           )}
         </div>
-        <div className="max-h-[380px] overflow-y-auto">
+        {/* On mobile cap height by viewport (otherwise long lists hide
+            the View queue footer). 60vh works across phone heights. */}
+        <div className="max-h-[60vh] overflow-y-auto sm:max-h-[380px]">
           {items.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-2 px-6 py-10 text-center text-muted-foreground">
               <Inbox className="h-6 w-6" />
@@ -243,7 +254,9 @@ export function NotificationBell() {
                         if (isUnread) markOne(n.id);
                       }}
                       className={cn(
-                        "group flex w-full items-start gap-3 px-3.5 py-3 text-left transition hover:bg-muted/60",
+                        // Slightly taller rows on touch screens so the
+                        // tap target meets thumb-friendly size.
+                        "group flex w-full items-start gap-3 px-3.5 py-3.5 text-left transition active:bg-muted/80 hover:bg-muted/60 sm:py-3",
                         isUnread && "bg-primary/[0.04]",
                       )}
                     >

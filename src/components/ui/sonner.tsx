@@ -127,6 +127,23 @@ const Toaster = ({ ...props }: ToasterProps) => {
           right: -8px !important;
           top: -8px !important;
         }
+        /* Mobile: stretch toasts to nearly full viewport width and pull
+           them away from the right edge so they don't kiss the screen.
+           Default sonner width (~356px) is fine on tablets+ but cramped
+           on a 360px phone, especially with longer error messages. */
+        @media (max-width: 640px) {
+          [data-sonner-toaster][data-y-position="top"] {
+            top: max(env(safe-area-inset-top, 0px), 0.5rem) !important;
+          }
+          [data-sonner-toaster][data-x-position="right"] {
+            right: 0.5rem !important;
+            left: 0.5rem !important;
+            width: auto !important;
+          }
+          [data-sonner-toast] {
+            width: 100% !important;
+          }
+        }
       `}</style>
 
       <Sonner

@@ -139,6 +139,33 @@
   html {
     overflow-x: hidden;
     -webkit-text-size-adjust: 100%;
+    /* Disable rubber-band overscroll on iOS / pull-to-refresh on Android
+       so the dashboard feels like a native app rather than a web page.
+       `contain` keeps overscroll inside the document body — won't break
+       inner scroll containers. */
+    overscroll-behavior-y: contain;
+  }
+  /* Make any taps feel "native": no 300ms delay, no double-tap zoom. */
+  body,
+  button,
+  [role="button"],
+  a {
+    touch-action: manipulation;
+  }
+  /* When launched from "Add to Home Screen", treat the surface like a
+     native app — no text selection on idle taps (matches what users
+     expect from iOS / Android apps). Inputs + textareas keep selection. */
+  @media (display-mode: standalone) {
+    body {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    input,
+    textarea,
+    [contenteditable] {
+      -webkit-user-select: text;
+      user-select: text;
+    }
   }
   /* Any button feels tappable */
   button,
