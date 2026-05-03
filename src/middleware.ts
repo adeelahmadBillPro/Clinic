@@ -31,6 +31,11 @@ function isPublic(pathname: string): boolean {
   if (pathname.startsWith("/api/forgot-password")) return true;
   if (pathname.startsWith("/api/reset-password")) return true;
   if (pathname.startsWith("/api/reviews")) return true;
+  // Passkey login challenge — generated for not-yet-signed-in users.
+  // The verify step happens via NextAuth /api/auth/callback which is
+  // already public above. Registration endpoints stay gated (require
+  // an existing session).
+  if (pathname.startsWith("/api/passkeys/auth/")) return true;
   // `endsWith` would also allow `/api/anything/reviews` when combined with
   // a startsWith — tighten to exact-shape regex.
   if (/^\/api\/doctors\/[^/]+\/reviews$/.test(pathname)) return true;

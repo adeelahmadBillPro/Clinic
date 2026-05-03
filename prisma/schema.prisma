@@ -40,7 +40,43 @@ model User {
   resetOtpExpiresAt    DateTime?
   createdAt            DateTime  @default(now())
 
+  passkeys Passkey[]
+
   @@index([clinicId])
+}
+
+// WebAuthn passkey credential — biometric / hardware-key fallback for
+// password login. Each row is one (user, device) pair. Public key + counter
+// stored server-side; the private key never leaves the device's secure
+// enclave (Touch ID, Windows Hello, Android biometric, YubiKey, etc.).
+//
+// Login flow: client calls `navigator.credentials.get(...)`, browser asks
+// the user to authenticate, returns a signed assertion. Server verifies
+// against stored public key. No password ever crosses the wire.
+model Passkey {
+  id           String    @id @default(cuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // base64url-encoded credential id from the authenticator
+  credentialId String    @unique
+  // base64url-encoded public key
+  publicKey    String
+  // Anti-replay: each successful auth bumps the counter. Library refuses
+  // assertions with non-increasing counters.
+  counter      BigInt    @default(0)
+  // "platform" (built-in like Touch ID) vs "cross-platform" (USB key)
+  deviceType   String?
+  // Resident-key style device that backs up via iCloud/Google → user can
+  // sign in from another device with the same key.
+  backedUp     Boolean   @default(false)
+  // Comma-joined transports list, e.g. "internal,hybrid"
+  transports   String?
+  // Friendly name the user gave it (e.g. "iPhone 15", "Office Mac").
+  deviceName   String?
+  lastUsedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
 }
 
 model Clinic {

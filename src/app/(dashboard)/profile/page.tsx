@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { db } from "@/lib/tenant-db";
 import { ProfileForm } from "@/components/profile/ProfileForm";
 import { ScheduleEditor, type WeeklySchedule } from "@/components/profile/ScheduleEditor";
+import { PasskeyManager } from "@/components/profile/PasskeyManager";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "My profile — ClinicOS" };
@@ -96,6 +97,8 @@ export default async function ProfilePage() {
       />
 
       {doctor && schedule && <ScheduleEditor initial={schedule} />}
+
+      <PasskeyManager />
     </div>
   );
 }

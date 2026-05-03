@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/components/shared/PasswordInput";
 import { SubmitButton } from "@/components/shared/SubmitButton";
+import { PasskeyLoginButton } from "@/components/auth/PasskeyLoginButton";
 import { loginSchema, type LoginInput } from "@/lib/validations/auth";
 import { stackContainer, stackItem } from "@/lib/motion";
 import { useEnterTabsForward } from "@/lib/hooks/useEnterTabsForward";
@@ -128,6 +129,8 @@ export function LoginForm() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <PasskeyLoginButton />
 
       <motion.div
         variants={stackContainer}
