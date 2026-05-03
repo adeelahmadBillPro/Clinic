@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Download, X, Smartphone } from "lucide-react";
+import { Download, X, Smartphone, Lock } from "lucide-react";
 
 const DISMISS_KEY = "clinicos:install-dismissed-at";
 // Re-show prompt after 7 days if user dismissed (don't be nagging).
@@ -13,14 +13,19 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
 };
 
+type Mode = "android-install" | "ios-hint" | "needs-https";
+
 /**
  * "Install app" banner shown to mobile users who haven't installed yet.
  *
- * Two paths:
- * 1. Android Chrome / Edge: capture the `beforeinstallprompt` event and
- *    surface a button that triggers the native install dialog.
- * 2. iOS Safari: no programmatic install API, so we render manual
- *    instructions ("Tap Share → Add to Home Screen").
+ * Three modes:
+ * 1. android-install — `beforeinstallprompt` fired (HTTPS Chrome / Edge):
+ *    show real "Install now" button that triggers the native dialog.
+ * 2. ios-hint — iOS Safari on HTTPS: no programmatic API, render manual
+ *    "Tap Share → Add to Home Screen" instructions.
+ * 3. needs-https — site is on plain HTTP: install simply won't work in
+ *    any browser (PWA spec requires a secure context). Tell the user
+ *    truthfully so they don't keep tapping a dead button.
  *
  * Auto-hides if:
  * - already running standalone (display-mode: standalone)
@@ -30,7 +35,7 @@ type BeforeInstallPromptEvent = Event & {
 export function InstallAppPrompt() {
   const [installEvent, setInstallEvent] =
     useState<BeforeInstallPromptEvent | null>(null);
-  const [showIosHint, setShowIosHint] = useState(false);
+  const [mode, setMode] = useState<Mode | null>(null);
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -59,23 +64,23 @@ export function InstallAppPrompt() {
     if (!isMobile) return;
 
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
-    const isSafari = /safari/i.test(navigator.userAgent) && !/crios|fxios/i.test(navigator.userAgent);
+    const isSafari =
+      /safari/i.test(navigator.userAgent) &&
+      !/crios|fxios/i.test(navigator.userAgent);
 
-    // Browsers refuse to fire `beforeinstallprompt` on plain HTTP. Surface
-    // the iOS-style manual hint so the owner sees something rather than
-    // wondering why nothing appears — and knows the fix is HTTPS.
+    // No HTTPS → install will not work, period. Show an honest hint
+    // (with no fake install button) after a short delay.
     if (!window.isSecureContext) {
       const t = setTimeout(() => {
-        setShowIosHint(true);
+        setMode("needs-https");
         setVisible(true);
       }, 4000);
       return () => clearTimeout(t);
     }
 
     if (isIos && isSafari) {
-      // No programmatic API; show manual instructions after a short delay.
       const t = setTimeout(() => {
-        setShowIosHint(true);
+        setMode("ios-hint");
         setVisible(true);
       }, 4000);
       return () => clearTimeout(t);
@@ -85,6 +90,7 @@ export function InstallAppPrompt() {
       // Stop Chrome's default mini-infobar — we present our own.
       e.preventDefault();
       setInstallEvent(e as BeforeInstallPromptEvent);
+      setMode("android-install");
       setVisible(true);
     }
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
@@ -119,17 +125,24 @@ export function InstallAppPrompt() {
     setInstallEvent(null);
   }
 
+  const isHttpsWarning = mode === "needs-https";
+
   return (
     <AnimatePresence>
-      {visible && (
+      {visible && mode && (
         <motion.div
-          // Above the bottom nav (which is ~80px). Safe-area inset added
-          // via env() so the banner clears the home-bar on iPhones.
           initial={{ y: 80, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 80, opacity: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 28 }}
-          className="fixed inset-x-3 z-50 rounded-2xl border bg-card p-3.5 shadow-xl backdrop-blur-md sm:hidden"
+          // Above the bottom nav (~80px) with safe-area inset for the
+          // iPhone home-bar.
+          className={
+            "fixed inset-x-3 z-50 rounded-2xl border p-3.5 shadow-xl backdrop-blur-md sm:hidden " +
+            (isHttpsWarning
+              ? "border-amber-300/60 bg-amber-50/95 dark:border-amber-400/30 dark:bg-amber-950/80"
+              : "bg-card")
+          }
           style={{
             bottom: `calc(80px + env(safe-area-inset-bottom, 0px) + 0.5rem)`,
           }}
@@ -137,44 +150,78 @@ export function InstallAppPrompt() {
           aria-label="Install ClinicOS"
         >
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
-              <Smartphone className="h-5 w-5" />
+            <div
+              className={
+                "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl " +
+                (isHttpsWarning
+                  ? "bg-amber-200/60 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200"
+                  : "bg-primary/15 text-primary")
+              }
+            >
+              {isHttpsWarning ? (
+                <Lock className="h-5 w-5" />
+              ) : (
+                <Smartphone className="h-5 w-5" />
+              )}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold">Install ClinicOS</div>
-              {showIosHint ? (
-                <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                  Tap{" "}
-                  <span className="inline-flex items-center gap-0.5 font-medium text-foreground">
-                    Share
-                  </span>{" "}
-                  →{" "}
-                  <span className="font-medium text-foreground">
-                    Add to Home Screen
-                  </span>{" "}
-                  for a faster, full-screen app.
-                </p>
-              ) : (
-                <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
-                  One tap, no app store. Faster load, full-screen, like a
-                  native app.
-                </p>
+              {mode === "android-install" && (
+                <>
+                  <div className="text-sm font-semibold">Install ClinicOS</div>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
+                    One tap, no app store. Faster load, full-screen, like a
+                    native app.
+                  </p>
+                  <button
+                    onClick={install}
+                    className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition active:scale-95"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Install now
+                  </button>
+                </>
               )}
-              {!showIosHint && installEvent && (
-                <button
-                  onClick={install}
-                  className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground transition active:scale-95"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Install now
-                </button>
+
+              {mode === "ios-hint" && (
+                <>
+                  <div className="text-sm font-semibold">Install ClinicOS</div>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-muted-foreground">
+                    Tap{" "}
+                    <span className="inline-flex items-center gap-0.5 font-medium text-foreground">
+                      Share
+                    </span>{" "}
+                    →{" "}
+                    <span className="font-medium text-foreground">
+                      Add to Home Screen
+                    </span>{" "}
+                    for a faster, full-screen app.
+                  </p>
+                </>
+              )}
+
+              {mode === "needs-https" && (
+                <>
+                  <div className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                    Install needs HTTPS
+                  </div>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-amber-800/90 dark:text-amber-200/85">
+                    Browsers only allow installing as a native-style app on
+                    secure (https://) domains. Attach a domain with SSL to
+                    enable the install prompt and offline support.
+                  </p>
+                </>
               )}
             </div>
             <button
               type="button"
               onClick={dismiss}
               aria-label="Dismiss"
-              className="-mr-1 -mt-1 rounded-full p-1.5 text-muted-foreground hover:bg-muted"
+              className={
+                "-mr-1 -mt-1 rounded-full p-1.5 transition " +
+                (isHttpsWarning
+                  ? "text-amber-700/80 hover:bg-amber-200/40 dark:text-amber-300/80 dark:hover:bg-amber-800/40"
+                  : "text-muted-foreground hover:bg-muted")
+              }
             >
               <X className="h-4 w-4" />
             </button>

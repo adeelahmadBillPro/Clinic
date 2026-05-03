@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { auth } from "@/auth";
+import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Sidebar } from "@/components/shared/Sidebar";
 import { MobileBottomNav } from "@/components/shared/MobileBottomNav";
@@ -55,7 +55,7 @@ export default async function DashboardLayout({
           trialEndsAt={clinic?.trialEndsAt ?? null}
           status={subscription?.status}
         />
-        <TopBar clinicName={clinic?.name} enabledModules={moduleSettings} />
+        <TopBar />
 
         <main
           className={cn(
@@ -72,7 +72,17 @@ export default async function DashboardLayout({
         </main>
       </div>
 
-      <MobileBottomNav role={session.user.role} />
+      <MobileBottomNav
+        role={session.user.role}
+        clinicName={clinic?.name ?? null}
+        userEmail={session.user.email ?? null}
+        userName={session.user.name ?? null}
+        enabledModules={moduleSettings}
+        signOut={async () => {
+          "use server";
+          await signOut({ redirectTo: "/login" });
+        }}
+      />
       <ScrollToTopDashboard />
       <InstallAppPrompt />
     </div>

@@ -1,14 +1,20 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { auth, signOut } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { Logo } from "@/components/shared/Logo";
 import { Button } from "@/components/ui/button";
-import { ShieldCheck, LayoutDashboard, Building2, Inbox, LogOut } from "lucide-react";
+import {
+  ShieldCheck,
+  LayoutDashboard,
+  Building2,
+  Inbox,
+  LogOut,
+} from "lucide-react";
 import { Suspense } from "react";
 import { AccessDeniedToast } from "@/components/shared/AccessDeniedToast";
-import { AdminMobileMenu } from "@/components/admin/AdminMobileMenu";
+import { AdminMobileBottomNav } from "@/components/admin/AdminMobileBottomNav";
 import { InstallAppPrompt } from "@/components/shared/InstallAppPrompt";
+import Link from "next/link";
 
 export const metadata = { title: "Super Admin — ClinicOS" };
 
@@ -89,42 +95,25 @@ export default async function AdminLayout({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-16 items-center gap-3 border-b bg-background/85 px-4 backdrop-blur-md sm:px-6 lg:hidden">
-          {/* Mobile: hamburger drawer with full nav + sign out. The
-              desktop sidebar (above) is hidden on small screens so without
-              this menu the user is stranded with no way to navigate or
-              log out. */}
-          <AdminMobileMenu
-            email={session.user.email ?? ""}
-            pendingCount={pendingCount}
-            signOut={async () => {
-              "use server";
-              await signOut({ redirectTo: "/login" });
-            }}
-          />
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b bg-background/85 px-4 pt-[max(env(safe-area-inset-top),0px)] backdrop-blur-md sm:h-16 sm:px-6 lg:hidden">
           <Logo />
           <span className="text-sm font-semibold">Super Admin</span>
-          <div className="ml-auto flex items-center gap-1">
-            <Link
-              href="/admin/upgrades"
-              className="relative inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent"
-            >
-              <Inbox className="h-4 w-4" />
-              {pendingCount > 0 && (
-                <span className="absolute -right-0.5 -top-0.5 rounded-full bg-destructive px-1.5 text-[10px] font-semibold text-destructive-foreground">
-                  {pendingCount}
-                </span>
-              )}
-            </Link>
-          </div>
         </header>
-        <main className="flex-1 overflow-x-hidden px-4 pb-10 pt-6 sm:px-6">
+        <main className="flex-1 overflow-x-hidden px-4 pt-6 sm:px-6 pb-[calc(80px+env(safe-area-inset-bottom,0px))] lg:pb-10">
           <Suspense fallback={null}>
             <AccessDeniedToast />
           </Suspense>
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>
+      <AdminMobileBottomNav
+        email={session.user.email ?? ""}
+        pendingCount={pendingCount}
+        signOut={async () => {
+          "use server";
+          await signOut({ redirectTo: "/login" });
+        }}
+      />
       <InstallAppPrompt />
     </div>
   );
