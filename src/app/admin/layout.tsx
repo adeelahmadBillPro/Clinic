@@ -8,6 +8,7 @@ import { ShieldCheck, LayoutDashboard, Building2, Inbox, LogOut } from "lucide-r
 import { Suspense } from "react";
 import { AccessDeniedToast } from "@/components/shared/AccessDeniedToast";
 import { AdminMobileMenu } from "@/components/admin/AdminMobileMenu";
+import { InstallAppPrompt } from "@/components/shared/InstallAppPrompt";
 
 export const metadata = { title: "Super Admin — ClinicOS" };
 
@@ -124,6 +125,7 @@ export default async function AdminLayout({
           <div className="mx-auto w-full max-w-7xl">{children}</div>
         </main>
       </div>
+      <InstallAppPrompt />
     </div>
   );
 }

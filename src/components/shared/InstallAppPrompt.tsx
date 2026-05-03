@@ -61,6 +61,17 @@ export function InstallAppPrompt() {
     const isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     const isSafari = /safari/i.test(navigator.userAgent) && !/crios|fxios/i.test(navigator.userAgent);
 
+    // Browsers refuse to fire `beforeinstallprompt` on plain HTTP. Surface
+    // the iOS-style manual hint so the owner sees something rather than
+    // wondering why nothing appears — and knows the fix is HTTPS.
+    if (!window.isSecureContext) {
+      const t = setTimeout(() => {
+        setShowIosHint(true);
+        setVisible(true);
+      }, 4000);
+      return () => clearTimeout(t);
+    }
+
     if (isIos && isSafari) {
       // No programmatic API; show manual instructions after a short delay.
       const t = setTimeout(() => {

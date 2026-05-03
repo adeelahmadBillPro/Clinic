@@ -19,21 +19,25 @@ export function PasskeyLoginButton() {
   // We always render the divider to prevent layout shift when hydration
   // finishes; the button itself only appears once we know the API works.
   const [supported, setSupported] = useState<boolean | null>(null);
+  // Separate state so we can distinguish "no API at all" (old browser) from
+  // "API exists but blocked because we're on plain HTTP" — the second case
+  // is by far the most common in dev/staging and deserves a visible hint
+  // rather than a silent absence.
+  const [insecure, setInsecure] = useState(false);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setSupported(
-      typeof window !== "undefined" &&
-        typeof window.PublicKeyCredential !== "undefined",
-    );
+    if (typeof window === "undefined") return;
+    const hasApi = typeof window.PublicKeyCredential !== "undefined";
+    const secure = window.isSecureContext;
+    setSupported(hasApi);
+    setInsecure(!secure);
   }, []);
 
-  // Hide entirely while we don't know yet (avoids flash of broken-looking
-  // disabled state during the ~50ms before hydration sets supported).
   if (supported === null) return null;
-  // Browser without WebAuthn (rare in 2026 but happens in some embedded
-  // webviews) — silently show no shortcut.
-  if (!supported) return null;
+  // Browser without WebAuthn AND we're on a secure context — truly
+  // unsupported (rare, e.g. some embedded webviews). Hide silently.
+  if (!supported && !insecure) return null;
 
   async function handle() {
     setBusy(true);
@@ -102,6 +106,42 @@ export function PasskeyLoginButton() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // Insecure context (HTTP). Render a disabled, explanatory button instead
+  // of hiding — owners need to know their HTTPS isn't set up yet.
+  if (insecure) {
+    return (
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.05 }}
+        className="space-y-3"
+      >
+        <div
+          className="flex w-full items-start gap-2.5 rounded-lg border border-amber-300/60 bg-amber-50/70 px-4 py-3 text-left dark:border-amber-400/30 dark:bg-amber-950/30"
+          role="note"
+        >
+          <Fingerprint className="mt-0.5 h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
+          <div className="min-w-0 flex-1">
+            <div className="text-xs font-semibold text-amber-900 dark:text-amber-100">
+              Passkey login needs HTTPS
+            </div>
+            <div className="mt-0.5 text-[11px] leading-snug text-amber-800/80 dark:text-amber-200/80">
+              Browsers only allow fingerprint / Face ID on secure (https://) origins.
+              Attach a domain with SSL to enable this.
+            </div>
+          </div>
+        </div>
+        <div className="relative flex items-center">
+          <div className="flex-1 border-t" />
+          <span className="px-3 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            sign in with password
+          </span>
+          <div className="flex-1 border-t" />
+        </div>
+      </motion.div>
+    );
   }
 
   return (
